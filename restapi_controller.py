@@ -3,7 +3,7 @@ import requests
 import os
 from functools import reduce
 
-CONFIG_FILE = 'api_config.json'
+from app_config import CONFIG_PATH
 
 def _get_nested_value(d, key_path):
     """Holt einen verschachtelten Wert aus einem Dictionary mittels Punktnotation."""
@@ -13,7 +13,7 @@ def _get_nested_value(d, key_path):
         return None
 
 class ApiController:
-    def __init__(self, config_path=CONFIG_FILE):
+    def __init__(self, config_path=CONFIG_PATH):
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Konfigurationsdatei nicht gefunden: {config_path}")
         with open(config_path, 'r', encoding='utf-8') as f:

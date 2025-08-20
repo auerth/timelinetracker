@@ -8,15 +8,16 @@ from datetime import datetime, timedelta, date
 from tkcalendar import DateEntry
 import settings_manager 
 import restapi_controller 
-
+import os
 # HINZUGEFÜGT: Imports für das Tray-Icon
 import threading
 from PIL import Image, ImageDraw
 import pystray
 from search_dialog import SearchDialog 
 import json
+# Importiere die Pfade aus deiner Konfigurationsdatei
+from app_config import APP_DIR, CONFIG_PATH, DB_PATH, initialize_config
 
-DB_NAME = 'timeline_tracker_5min.db'
 
 # --- (Alle globalen Konstanten und Variablen bleiben gleich) ---
 # --- Globale Konstanten ---
@@ -119,7 +120,7 @@ def create_icon_image():
         return image
 
 def track_activity_in_blocks():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     while True:
         now = datetime.now()
@@ -184,7 +185,7 @@ def draw_timeline(target_date):
     
     day_start = datetime.combine(target_date, datetime.min.time())
     day_end = day_start + timedelta(days=1)
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT app_name, window_title, start_time, end_time FROM activity_events WHERE start_time >= ? AND start_time < ? ORDER BY start_time", (day_start, day_end))
     raw_events = cursor.fetchall()
@@ -425,7 +426,7 @@ def end_drag(event):
     start_time = y_to_datetime(y_start, displayed_date)
     end_time = y_to_datetime(y_end, displayed_date)
     
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT 1 FROM manual_events WHERE (start_time < ?) AND (end_time > ?)', (end_time, start_time))
     
@@ -468,7 +469,7 @@ def end_drag(event):
                     # Erfolgreich! Speichere die externe ID in der lokalen DB
                     remote_time_entry_id = response['id']
                     
-                    conn = sqlite3.connect(DB_NAME)
+                    conn = sqlite3.connect(DB_PATH)
                     cursor = conn.cursor()
                     cursor.execute('INSERT INTO manual_events (start_time, end_time, description,externalId,comment,time_entry_id ) VALUES (?, ?, ?, ?, ?,?)',
                                 (start_time, end_time, description,selected_task['id'],comment,remote_time_entry_id))
@@ -500,7 +501,7 @@ def delete_manual_event(event_db_id):
 
     conn = None
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT time_entry_id FROM manual_events WHERE id = ?", (event_db_id,))
         result = cursor.fetchone()
@@ -600,38 +601,67 @@ def on_date_selected(event):
         scroll_to_now()
 
 def open_settings_dialog():
-    # Die innere Funktion wird angepasst, um den Autostart zu steuern
+    # --- INNERE FUNKTIONEN FÜR DIE BUTTONS ---
     def save_and_close():
-        # settings_manager.save_setting('redmine_url', url_var.get())
-        # settings_manager.save_setting('redmine_token', token_var.get())
-        
-        # Neuen Autostart-Status basierend auf der Checkbox setzen
         try:
-            settings_manager.set_autostart(autostart_var.get())
+            settings_manager.set_autostart(autostostart_var.get())
         except Exception as e:
             messagebox.showerror("Fehler", f"Autostart konnte nicht geändert werden:\n{e}", parent=settings_window)
 
         messagebox.showinfo("Gespeichert", "Einstellungen wurden erfolgreich gespeichert.", parent=settings_window)
         settings_window.destroy()
 
+    def open_app_directory():
+        """Öffnet den Roaming-Ordner der Anwendung im Explorer."""
+        try:
+            # os.startfile() ist der direkteste Weg unter Windows
+            os.startfile(APP_DIR)
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Verzeichnis konnte nicht geöffnet werden:\n{e}", parent=settings_window)
+
+    def open_config_file():
+        """Öffnet die Konfigurationsdatei mit dem Standard-Editor."""
+        try:
+            os.startfile(CONFIG_PATH)
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Konfigurationsdatei konnte nicht geöffnet werden:\n{e}", parent=settings_window)
+
+    def delete_database():
+        """Löscht die lokale Datenbank nach einer Bestätigungsabfrage."""
+        if messagebox.askyesno("Datenbank wirklich löschen?",
+                               "Sind Sie sicher? Alle lokal gespeicherten Zeiteinträge werden unwiderruflich gelöscht. "
+                               "Die Anwendung muss danach neu gestartet werden.",
+                               parent=settings_window):
+            try:
+                # Wichtig: Hier sollte idealerweise die DB-Verbindung geschlossen werden.
+                # Die einfachste und sicherste Methode ist, die App danach zu beenden.
+                if os.path.exists(DB_PATH):
+                    os.remove(DB_PATH)
+                    messagebox.showinfo("Erfolg", "Die Datenbank wurde gelöscht. Die Anwendung wird jetzt beendet.", parent=settings_window)
+                    root.destroy() # Beendet die Hauptanwendung
+                else:
+                    messagebox.showinfo("Hinweis", "Die Datenbank existiert bereits nicht mehr.", parent=settings_window)
+            except Exception as e:
+                messagebox.showerror("Fehler", f"Datenbank konnte nicht gelöscht werden:\n{e}", parent=settings_window)
+
+    # --- FENSTER-SETUP ---
     settings_window = tk.Toplevel(root)
     settings_window.title("Einstellungen")
     settings_window.resizable(False, False)
     settings_window.transient(root)
     settings_window.grab_set()
     
-    # Fenstergröße anpassen für die neue Checkbox
+    # Fensterhöhe anpassen für die neuen Buttons
     win_width = 400
-    win_height = 250 # Etwas höher gemacht
+    win_height = 350 # Erhöht für den neuen Bereich
 
+    # (Code zum Zentrieren des Fensters bleibt unverändert)
     root_x = root.winfo_x()
     root_y = root.winfo_y()
     root_width = root.winfo_width()
     root_height = root.winfo_height()
-
     pos_x = root_x + (root_width // 2) - (win_width // 2)
     pos_y = root_y + (root_height // 2) - (win_height // 2)
-
     settings_window.geometry(f'{win_width}x{win_height}+{pos_x}+{pos_y}')
     settings_window.configure(bg=COLOR_BG)
     
@@ -639,27 +669,30 @@ def open_settings_dialog():
     frame.pack(fill="both", expand=True)
     frame.columnconfigure(1, weight=1)
 
-    # Lade die Einstellungen über den neuen Manager
-    # url_var = tk.StringVar(value=settings_manager.load_setting('redmine_url'))
-    # token_var = tk.StringVar(value=settings_manager.load_setting('redmine_token'))
-    
-    # Lade den aktuellen Autostart-Status für die Checkbox
+    # --- VARIABLEN ---
     autostart_var = tk.BooleanVar(value=settings_manager.is_autostart_enabled())
 
-    # # --- Widgets ---
-    # ttk.Label(frame, text="Redmine URL:").grid(row=0, column=0, sticky="w", pady=5)
-    # ttk.Entry(frame, textvariable=url_var).grid(row=0, column=1, sticky="ew", padx=5)
-
-    # ttk.Label(frame, text="Redmine Token:").grid(row=1, column=0, sticky="w", pady=5)
-    # ttk.Entry(frame, textvariable=token_var, show='*').grid(row=1, column=1, sticky="ew", padx=5)
-
-    # HINZUGEFÜGT: Checkbox für den Autostart
+    # --- WIDGETS ---
     autostart_check = ttk.Checkbutton(frame, text="Automatisch mit Windows starten", variable=autostart_var)
-    autostart_check.grid(row=2, column=0, columnspan=2, sticky="w", pady=(15, 0))
+    autostart_check.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 15))
     
-    # --- Buttons ---
+    # --- NEU: WARTUNGS-BEREICH ---
+    maintenance_frame = ttk.LabelFrame(frame, text="Wartung & Fehlerbehebung", padding=10)
+    maintenance_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
+    maintenance_frame.columnconfigure(0, weight=1) # Buttons zentrieren
+
+    btn_open_dir = ttk.Button(maintenance_frame, text="Daten-Ordner öffnen", command=open_app_directory)
+    btn_open_dir.pack(fill='x', pady=2)
+    
+    btn_open_config = ttk.Button(maintenance_frame, text="Konfigurationsdatei bearbeiten", command=open_config_file)
+    btn_open_config.pack(fill='x', pady=2)
+
+    btn_delete_db = ttk.Button(maintenance_frame, text="Lokale Datenbank löschen...", command=delete_database)
+    btn_delete_db.pack(fill='x', pady=(2, 0))
+    
+    # --- SPEICHERN/ABBRECHEN BUTTONS ---
     button_frame = ttk.Frame(frame)
-    button_frame.grid(row=3, column=0, columnspan=2, pady=(20, 0))
+    button_frame.grid(row=2, column=0, columnspan=2, pady=(20, 0))
     
     ttk.Button(button_frame, text="Speichern", command=save_and_close).pack(side="left", padx=10)
     ttk.Button(button_frame, text="Abbrechen", command=settings_window.destroy).pack(side="left")
@@ -667,6 +700,7 @@ def open_settings_dialog():
 
 # --- Haupt-UI-Setup ---
 if __name__ == "__main__":
+    initialize_config()
     settings_manager.setup_database() 
     tracking_thread = threading.Thread(target=track_activity_in_blocks, daemon=True)
     tracking_thread.start()

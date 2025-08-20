@@ -2,9 +2,9 @@ import sqlite3
 import os
 import sys
 import winshell
+from app_config import DB_PATH, initialize_config
 
 # --- Konstanten ---
-DB_NAME = 'timeline_tracker_5min.db'
 # Der Name, den die Verknüpfung im Autostart haben soll
 SHORTCUT_NAME = "Timeline Tracker.lnk" 
 # Der Name deines Hauptskripts
@@ -14,7 +14,7 @@ MAIN_SCRIPT_NAME = "main.py"
 
 def setup_database():
     """Initialisiert die Datenbanktabellen, falls sie nicht existieren."""
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS activity_events (
@@ -37,7 +37,7 @@ def setup_database():
 
 def save_setting(key, value):
     """Speichert eine Einstellung in der Datenbank."""
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
@@ -45,7 +45,7 @@ def save_setting(key, value):
 
 def load_setting(key):
     """Lädt eine Einstellung aus der Datenbank."""
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
     result = cursor.fetchone()
