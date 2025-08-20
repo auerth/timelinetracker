@@ -25,7 +25,7 @@ def setup_database():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS manual_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT, start_time DATETIME NOT NULL,
-            end_time DATETIME NOT NULL, description TEXT NOT NULL
+            end_time DATETIME NOT NULL, description TEXT NOT NULL, externalId TEXT NOT NULL, time_entry_id TEXT NOT NULL, comment TEXT NOT NULL
         )
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_manual_start_time ON manual_events (start_time)')

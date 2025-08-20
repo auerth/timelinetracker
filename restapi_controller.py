@@ -1,9 +1,16 @@
 import json
 import requests
 import os
+from functools import reduce
 
-# Wir gehen davon aus, dass die JSON-Datei im selben Ordner liegt
 CONFIG_FILE = 'api_config.json'
+
+def _get_nested_value(d, key_path):
+    """Holt einen verschachtelten Wert aus einem Dictionary mittels Punktnotation."""
+    try:
+        return reduce(lambda val, key: val.get(key) if val else None, key_path.split('.'), d)
+    except (TypeError, AttributeError):
+        return None
 
 class ApiController:
     def __init__(self, config_path=CONFIG_FILE):
@@ -11,89 +18,102 @@ class ApiController:
             raise FileNotFoundError(f"Konfigurationsdatei nicht gefunden: {config_path}")
         with open(config_path, 'r', encoding='utf-8') as f:
             self.config = json.load(f)
-        
         self.base_url = self.config.get('api_base_url', '')
 
-    def _prepare_request(self, endpoint_name, **kwargs):
-        """Bereitet die URL, Header, Body und Parameter für einen Request vor."""
-        endpoint = self.config['endpoints'].get(endpoint_name)
-        if not endpoint:
+    def _execute(self, endpoint_name: str, **kwargs):
+        """
+        Bereitet einen Request vor und führt ihn aus. Kennt keine Logik für Tokens.
+        """
+        endpoint_config = self.config['endpoints'].get(endpoint_name)
+        if not endpoint_config:
             raise ValueError(f"Endpunkt '{endpoint_name}' nicht in der Konfiguration gefunden.")
 
-        # 1. URL zusammenbauen und Platzhalter ersetzen
-        path = endpoint['path']
-        for key, value in kwargs.items():
-            path = path.replace(f'{{{key}}}', str(value))
+        def format_recursive(item):
+            if isinstance(item, str):
+                try:
+                    return item.format(**kwargs)
+                except KeyError:
+                    return item
+            if isinstance(item, dict):
+                return {k: format_recursive(v) for k, v in item.items()}
+            if isinstance(item, list):
+                return [format_recursive(i) for i in item]
+            return item
+
+        path = format_recursive(endpoint_config.get('path', ''))
         full_url = self.base_url + path
-
-        # 2. Header vorbereiten und Platzhalter ersetzen
-        headers = self.config.get('api_headers', {}).copy()
-        for key, value in headers.items():
-            headers[key] = value.format(**kwargs)
-
-        # 3. Body vorbereiten und Platzhalter ersetzen
-        body = endpoint.get('body')
-        if body:
-            # json.dumps and loads, um eine tiefe Kopie zu erstellen
-            body = json.loads(json.dumps(body)) 
-            for key, value in body.items():
-                if isinstance(value, str):
-                    body[key] = value.format(**kwargs)
-
-        # 4. Query-Parameter vorbereiten und Platzhalter ersetzen
-        params = endpoint.get('params')
-        if params:
-            params = params.copy()
-            for key, value in params.items():
-                params[key] = value.format(**kwargs)
-
-        return endpoint['method'], full_url, headers, body, params
-
-    def _execute_request(self, method, url, headers, body, params):
-        """Führt den eigentlichen HTTP-Request aus und gibt die Antwort zurück."""
+        # Die Header werden jetzt direkt und ohne spezielle Behandlung aus der Config genommen
+        headers = format_recursive(self.config.get('api_headers', {}).copy())
+        body = format_recursive(endpoint_config.get('body'))
+        params = format_recursive(endpoint_config.get('params'))
+        
         try:
             response = requests.request(
-                method=method,
-                url=url,
-                headers=headers,
-                json=body,
-                params=params,
-                timeout=10 # Guter Standardwert
+                method=endpoint_config['method'], url=full_url, headers=headers, json=body, params=params, timeout=10
             )
-            response.raise_for_status()  # Wirft einen Fehler bei HTTP-Status 4xx oder 5xx
-            
-            # Bei DELETE-Requests gibt es oft keinen JSON-Body in der Antwort
-            if response.status_code == 204: # No Content
-                return None
-            return response.json()
-
+            response.raise_for_status()
+            return None if response.status_code == 204 else response.json()
         except requests.exceptions.RequestException as e:
-            print(f"API-Fehler: {e}")
-            # Hier könntest du eine spezifischere Fehlermeldung an die UI zurückgeben
             return {"error": str(e)}
 
-    # --- Öffentliche Methoden für deine Anwendung ---
+    # --- Öffentliche Methoden sind jetzt komplett token-agnostisch ---
 
-    def create_issue(self, api_token: str, title: str, description: str):
-        method, url, headers, body, params = self._prepare_request(
-            'create_issue', api_token=api_token, title=title, description=description
-        )
-        return self._execute_request(method, url, headers, body, params)
+# In der Klasse ApiController
 
-    def log_time(self, api_token: str, issue_id: int, time_decimal: float, comment: str):
-        method, url, headers, body, params = self._prepare_request(
-            'log_time', api_token=api_token, issue_id=issue_id, time_decimal=time_decimal, comment=comment
-        )
-        return self._execute_request(method, url, headers, body, params)
+    def log_time(self, issue_id: int, time_decimal: float, comment: str):
+        """Erfasst Zeit für eine Aufgabe und gibt die ID des neuen Eintrags zurück."""
+        # 1. API-Aufruf durchführen
+        raw_response = self._execute('log_time', issue_id=issue_id, time_decimal=time_decimal, comment=comment)
 
-    def search_issue(self, api_token: str, query: str):
-        method, url, headers, body, params = self._prepare_request(
-            'search_issue', api_token=api_token, query=query
-        )
-        return self._execute_request(method, url, headers, body, params)
+        # 2. Prüfen, ob der Aufruf an sich fehlgeschlagen ist
+        if not raw_response or (isinstance(raw_response, dict) and "error" in raw_response):
+            return raw_response  # Fehler direkt zurückgeben
+
+        # 3. Response-Mapping aus der Konfiguration holen
+        endpoint_config = self.config['endpoints'].get('log_time', {})
+        mapping = endpoint_config.get('response_mapping')
         
-    def delete_time_entry(self, api_token: str, time_entry_id: int):
-        method, url, headers, body, params = self._prepare_request(
-            'delete_time_entry', api_token=api_token, time_entry_id=time_entry_id
-        )
-        return self._execute_request(method, url, headers, body, params)
+        if not mapping:
+            # Fallback: Wenn kein Mapping da ist, komplette Antwort zurückgeben
+            return raw_response
+
+        # 4. Das Objekt extrahieren, das die ID enthält (z.B. das "time_entry" Objekt)
+        result_object = _get_nested_value(raw_response, mapping['results_path'])
+        if not result_object:
+            return {"error": f"Ergebnisobjekt unter Pfad '{mapping['results_path']}' nicht gefunden."}
+
+        # 5. Die ID aus dem Objekt extrahieren
+        entry_id = _get_nested_value(result_object, mapping['id_field'])
+        if entry_id is None:
+            return {"error": f"ID-Feld '{mapping['id_field']}' im Ergebnisobjekt nicht gefunden."}
+
+        # 6. Erfolgreich extrahierte ID in einem Dictionary zurückgeben
+        return {"id": entry_id}
+
+    def search_issue(self, query: str):
+        """Sucht nach Aufgaben und formatiert die Antwort für die Anzeige."""
+        raw_response = self._execute('search_issue', query=query)
+
+        if not raw_response or (isinstance(raw_response, dict) and "error" in raw_response):
+            return raw_response
+
+        mapping = self.config['endpoints']['search_issue'].get('response_mapping')
+        if not mapping:
+            return raw_response
+        results_list = _get_nested_value(raw_response, mapping['results_path'])
+        
+        if not isinstance(results_list, list):
+            return {"error": f"Ergebnisliste unter Pfad '{mapping['results_path']}' nicht gefunden."}
+
+        formatted_results = []
+        for item in results_list:
+            display_text = _get_nested_value(item, mapping['display_field'])
+            item_id = _get_nested_value(item, mapping['id_field'])
+            if display_text is not None and item_id is not None:
+                formatted_results.append({"id": item_id, "display": display_text})
+                
+        return formatted_results
+
+    def delete_time_entry(self, time_entry_id: int):
+        """Löscht einen Zeiteintrag."""
+        return self._execute('delete_time_entry', time_entry_id=time_entry_id)

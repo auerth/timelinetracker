@@ -1,0 +1,41 @@
+{
+  "api_base_url": "https://timeracking.softwere",
+  "api_headers": {
+    "Content-Type": "application/json",
+    "X-Redmine-API-Key": ""
+  },
+  "endpoints": {
+    "log_time": {
+      "method": "POST",
+      "path": "time_entries.json",
+      "body": {
+        "time_entry": {
+          "issue_id": "{issue_id}",
+          "hours": "{time_decimal}",
+          "comments": "{comment}"
+        }
+      },
+      "response_mapping": {
+        "results_path": "time_entry",
+        "id_field": "id"
+      }
+    },
+    "search_issue": {
+      "method": "GET",
+      "path": "issues.json",
+      "params": {
+        "subject": "~{query}",
+        "status": "open"
+      },
+      "response_mapping": {
+        "results_path": "issues",
+        "display_field": "subject",
+        "id_field": "id"
+      }
+    },
+    "delete_time_entry": {
+      "method": "DELETE",
+      "path": "time_entries/{time_entry_id}.json"
+    }
+  }
+}

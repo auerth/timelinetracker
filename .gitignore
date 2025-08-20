@@ -1,2 +1,5 @@
 __pycache__/**
-timeline_tracker_5min
+timeline_tracker_5min.db
+build/**
+dist/**
+tracker_app.spec

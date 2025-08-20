@@ -6,13 +6,17 @@ import threading
 import time
 from datetime import datetime, timedelta, date
 from tkcalendar import DateEntry
-import settings_manager # HINZUGEFÜGT
+import settings_manager 
+import restapi_controller 
 
 # HINZUGEFÜGT: Imports für das Tray-Icon
 import threading
 from PIL import Image, ImageDraw
 import pystray
+from search_dialog import SearchDialog 
+import json
 
+DB_NAME = 'timeline_tracker_5min.db'
 
 # --- (Alle globalen Konstanten und Variablen bleiben gleich) ---
 # --- Globale Konstanten ---
@@ -115,7 +119,7 @@ def create_icon_image():
         return image
 
 def track_activity_in_blocks():
-    conn = sqlite3.connect('timeline_tracker_5min.db')
+    conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     while True:
         now = datetime.now()
@@ -180,7 +184,7 @@ def draw_timeline(target_date):
     
     day_start = datetime.combine(target_date, datetime.min.time())
     day_end = day_start + timedelta(days=1)
-    conn = sqlite3.connect('timeline_tracker_5min.db')
+    conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT app_name, window_title, start_time, end_time FROM activity_events WHERE start_time >= ? AND start_time < ? ORDER BY start_time", (day_start, day_end))
     raw_events = cursor.fetchall()
@@ -202,13 +206,14 @@ def draw_timeline(target_date):
             canvas_auto.create_text(auto_width - 20, y_start + 5, text=display_time, anchor="ne", font=FONT_BOLD, fill="white")
 
     # GEÄNDERT: 'id' wird jetzt auch aus der Datenbank geholt
-    cursor.execute("SELECT id, start_time, end_time, description FROM manual_events WHERE start_time >= ? AND start_time < ? ORDER BY start_time", (day_start, day_end))
+    cursor.execute("SELECT id, start_time, end_time, description, comment, externalId FROM manual_events WHERE start_time >= ? AND start_time < ? ORDER BY start_time", (day_start, day_end))
     manual_events = cursor.fetchall()
     conn.close()
+    text_font = font.Font(font=FONT_BOLD)
 
     for event in manual_events:
         # GEÄNDERT: event_id wird aus dem Tupel extrahiert
-        event_id, start_time_str, end_time_str, description = event
+        event_id, start_time_str, end_time_str, description,comment,externalId = event
         start_time = datetime.fromisoformat(start_time_str)
         end_time = datetime.fromisoformat(end_time_str)
         
@@ -225,11 +230,49 @@ def draw_timeline(target_date):
             fill=COLOR_MANUAL_BLOCK, outline=COLOR_GRID_LINE, width=1, 
             activefill="#5a9bff", tags=(tag_id,)
         )
-        if height > 15:
+        if height > 30: # Evtl. den Mindestwert etwas erhöhen, damit Text Platz hat
+            # 1. Zeichne die obere Zeile (Beschreibung und Zeit)
+            y_top_line = y_start + 5
             display_text = f"{description}"
             display_time = f"{duration_decimal:.2f}h"
-            canvas_manual.create_text(TIME_AXIS_WIDTH + 20, y_start + 5, text=display_text, anchor="nw", font=FONT_BOLD, fill="white", tags=(tag_id,))
-            canvas_manual.create_text(manual_width - 20, y_start + 5, text=display_time, anchor="ne", font=FONT_BOLD, fill="white", tags=(tag_id,))
+            
+            canvas_manual.create_text(
+                TIME_AXIS_WIDTH + 20, y_top_line, 
+                text=display_text, anchor="nw", font=FONT_BOLD, fill="white", tags=(tag_id,)
+            )
+            canvas_manual.create_text(
+                manual_width - 20, y_top_line, 
+                text=display_time, anchor="ne", font=FONT_BOLD, fill="white", tags=(tag_id,)
+            )
+
+            # 2. Berechne die Position für den Kommentar dynamisch
+            line_height = text_font.metrics('linespace') # Höhe einer Textzeile
+            # Startposition ist unter der ersten Zeile plus ein kleiner Abstand
+            y_comment_start = y_top_line + line_height + 5 
+            
+            # Die x-Position soll die Mitte des Blocks sein
+            x_comment_left = TIME_AXIS_WIDTH + 20 # GEÄNDERT
+            
+            max_text_width = manual_width - 100 # Etwas mehr Rand lassen
+            max_y_coordinate = y_start + height - 5 # Sicherstellen, dass Text nicht am Rand klebt
+
+            # 3. Zeichne den Kommentar mit der neuen Position und den Korrekturen
+            # Nur wenn ein Kommentar vorhanden ist
+            if comment and comment.strip():
+                draw_wrapped_and_truncated_text(
+                    canvas=canvas_manual,
+                    x=x_comment_left,
+                    y=y_comment_start,
+                    text=comment,
+                    max_width=max_text_width,
+                    max_bottom_y=max_y_coordinate,
+                    anchor="nw",                  # GEÄNDERT: Anker auf "nw" (oben-links)
+                    justify="left",               # GEÄNDERT: Textzeilen linksbündig
+                    font=FONT_BOLD,
+                    fill="white",
+                    tags=(tag_id,)
+                )
+
     
     if target_date == date.today():
         now = datetime.now()
@@ -244,6 +287,68 @@ def draw_timeline(target_date):
     
     if target_date == date.today():
         root.after(60000, lambda: draw_timeline(displayed_date))
+        
+import tkinter as tk
+from tkinter import font
+
+def draw_wrapped_and_truncated_text(canvas, x, y, text, max_width, max_bottom_y, **kwargs):
+    """
+    Zeichnet Text auf einen Canvas, der automatisch umgebrochen und bei
+    Bedarf mit '...' gekürzt wird, um eine maximale Höhe nicht zu überschreiten.
+
+    Args:
+        canvas: Das tkinter.Canvas-Objekt.
+        x (int): Die x-Koordinate für den Textanker.
+        y (int): Die y-Koordinate für den Textanker.
+        text (str): Der zu zeichnende Text.
+        max_width (int): Die maximale Breite, die der Text haben darf, bevor er umbricht.
+        max_bottom_y (int): Die absolute y-Koordinate, die der untere Rand des Textes nicht überschreiten darf.
+        **kwargs: Weitere Argumente für canvas.create_text (z.B. font, fill, anchor, tags).
+    """
+    temp_text = text
+
+    while True:
+        # Erstelle das Textobjekt mit der aktuellen Textversion und der maximalen Breite
+        item_id = canvas.create_text(x, y, text=temp_text, width=max_width, **kwargs)
+        
+        # Hol dir die Bounding Box des erstellten Textobjekts
+        bbox = canvas.bbox(item_id)
+        
+        # Wenn keine Bounding Box vorhanden ist (z.B. leerer Text), abbrechen
+        if not bbox:
+            canvas.delete(item_id)
+            return None # Gibt nichts zurück, wenn nichts gezeichnet werden kann
+
+        # Prüfe, ob der untere Rand des Textes (y2) innerhalb der erlaubten Höhe liegt
+        bottom_y = bbox[3]
+        if bottom_y <= max_bottom_y:
+            # Der Text passt, wir sind fertig und geben die ID des Objekts zurück
+            return item_id
+
+        # Der Text ist zu hoch, also löschen wir ihn und versuchen es mit einer kürzeren Version
+        canvas.delete(item_id)
+
+        # Wenn der Text schon gekürzt wurde, entfernen wir die letzten 4 Zeichen ("...")
+        # und versuchen es erneut.
+        if temp_text.endswith("..."):
+            temp_text = temp_text[:-4]
+
+        # Finde das letzte Leerzeichen, um sauber am Wortende zu kürzen
+        last_space = temp_text.rfind(' ')
+        if last_space != -1:
+            # Kürze den Text bis zum letzten Wort
+            temp_text = temp_text[:last_space]
+        else:
+            # Kein Leerzeichen gefunden, kürze den Text einfach um ein paar Zeichen
+            temp_text = temp_text[:-5]
+
+        # Wenn der Text leer wird, können wir nichts mehr kürzen. Schleife beenden.
+        if not temp_text:
+            # Optional: Zeichne nur die Auslassungspunkte, wenn gar nichts passt
+            return canvas.create_text(x, y, text="...", width=max_width, **kwargs)
+
+        # Hänge die Auslassungspunkte an den gekürzten Text an
+        temp_text += "..."
 
 # --- (Navigations- und Drag&Drop-Funktionen unverändert) ---
 def show_previous_day():
@@ -305,6 +410,7 @@ def drag_motion(event):
     y_bottom = max(y_anchor, snapped_y)
     canvas_manual.coords(drag_data["temp_rect"], TIME_AXIS_WIDTH, y_top, manual_width, y_bottom + pixels_per_block)
 
+# Ersetze die komplette 'end_drag' Funktion in deiner Hauptdatei
 def end_drag(event):
     if drag_data["start_y"] is None: return
     canvas_manual.delete(drag_data["temp_rect"])
@@ -318,37 +424,130 @@ def end_drag(event):
         return
     start_time = y_to_datetime(y_start, displayed_date)
     end_time = y_to_datetime(y_end, displayed_date)
-    conn = sqlite3.connect('timeline_tracker_5min.db')
+    
+    conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('SELECT 1 FROM manual_events WHERE (start_time < ?) AND (end_time > ?)', (end_time, start_time))
+    
     if cursor.fetchone():
-        messagebox.showerror("Fehler", "Der neue Block überschneidet sich mit einem bestehenden Eintrag.")
+        messagebox.showerror("Error", "The new block overlaps with an existing entry.")
+        conn.close()
     else:
-        description = simpledialog.askstring("Neuer Eintrag", "Beschreibung für den Zeitblock:")
-        if description and description.strip():
-            cursor.execute('INSERT INTO manual_events (start_time, end_time, description) VALUES (?, ?, ?)',
-                           (start_time, end_time, description.strip()))
-            conn.commit()
+        conn.close()
+        
+        # CORRECTION: Correctly call the SearchDialog with all required arguments
+        color_config = {
+            'canvas_bg': COLOR_CANVAS_BG,
+            'fg': COLOR_FG,
+            'manual_block': COLOR_MANUAL_BLOCK
+        }
+        dialog = SearchDialog(root, title="Aufgabe zuweisen", colors=color_config)
+        selected_task = dialog.result['task']
+        comment = dialog.result['comment']
+        if selected_task and selected_task.get("id"):
+            description = f"[#{selected_task['id']}] {selected_task['display']}"
+           
+            # ----------------- ANFANG: API-AUFRUF -----------------
+            try:
+                # 1. API-Controller initialisieren
+                api_controller = restapi_controller.ApiController()
+
+                # 2. Dauer in Dezimalstunden umrechnen
+                duration = end_time - start_time
+                time_in_hours = duration.total_seconds() / 3600.0
+
+                # 3. API-Aufruf durchführen
+                response = api_controller.log_time(
+                    issue_id=selected_task['id'],
+                    time_decimal=time_in_hours,
+                    comment=comment
+                )
+
+
+                if response and 'id' in response:
+                    # Erfolgreich! Speichere die externe ID in der lokalen DB
+                    remote_time_entry_id = response['id']
+                    
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    cursor.execute('INSERT INTO manual_events (start_time, end_time, description,externalId,comment,time_entry_id ) VALUES (?, ?, ?, ?, ?,?)',
+                                (start_time, end_time, description,selected_task['id'],comment,remote_time_entry_id))
+                    conn.commit()
+                    conn.close()
+                    
+                elif response and 'error' in response:
+                    # API hat einen Fehler gemeldet
+                    messagebox.showerror(
+                        "API Fehler",
+                        f"Der lokale Eintrag wurde erstellt, aber die Zeit konnte nicht im externen System erfasst werden:\n\n{response['error']}"
+                    )
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                messagebox.showerror("Konfigurationsfehler", f"API-Konfiguration konnte nicht geladen werden: {e}")
+            except Exception as e:
+                # Fängt andere unerwartete Fehler ab (z.B. Netzwerkprobleme)
+                messagebox.showerror("Unerwarteter Fehler", f"Ein Fehler bei der API-Kommunikation ist aufgetreten: {e}")
             draw_timeline(displayed_date)
-    conn.close()
+        
     drag_data["start_y"], drag_data["temp_rect"] = None, None
+    
+def delete_manual_event(event_db_id):
+    """
+    Löscht einen manuellen Zeiteintrag. Behandelt 404-Fehler von der API als "bereits gelöscht".
+    """
+    if not messagebox.askyesno("Löschen bestätigen", 
+                               "Möchten Sie diesen Zeiteintrag wirklich endgültig löschen?"):
+        return
 
-# --- HINZUGEFÜGT: Funktion zum Löschen eines manuellen Eintrags ---
-def delete_manual_event(event_id):
-    """Zeigt einen Bestätigungsdialog und löscht den Eintrag bei Bestätigung."""
-    if messagebox.askyesno("Löschen bestätigen", "Möchten Sie diesen Eintrag wirklich löschen?", icon='warning'):
-        try:
-            conn = sqlite3.connect('timeline_tracker_5min.db')
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM manual_events WHERE id = ?", (event_id,))
-            conn.commit()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT time_entry_id FROM manual_events WHERE id = ?", (event_db_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            messagebox.showerror("Fehler", "Der zu löschende Eintrag wurde nicht in der Datenbank gefunden.")
+            return
+
+        time_entry_id = result[0]
+
+        if time_entry_id:
+            try:
+                api_controller = restapi_controller.ApiController()
+                response = api_controller.delete_time_entry(time_entry_id=time_entry_id)
+                
+                if response and 'error' in response:
+                    # NEU: Spezielle Behandlung für 404-Fehler
+                    if "404" in response['error']:
+                        messagebox.showinfo(
+                            "Hinweis",
+                            "Dieser Eintrag existiert im externen System nicht mehr.\n\n"
+                            "Der lokale Eintrag wird jetzt entfernt."
+                        )
+                        # Wichtig: KEIN "return" hier, damit der lokale Eintrag gelöscht wird.
+                    else:
+                        # Für alle ANDEREN Fehler wird der Vorgang abgebrochen
+                        messagebox.showerror(
+                            "API Fehler",
+                            f"Der Eintrag konnte im externen System nicht gelöscht werden:\n\n{response['error']}"
+                        )
+                        return # Lokalen Eintrag bei schwerwiegenden Fehlern NICHT löschen
+            except Exception as e:
+                messagebox.showerror("API Kommunikationsfehler", f"Fehler beim Löschen des externen Eintrags: {e}")
+                return
+
+        # Dieser Teil wird jetzt auch nach einem 404-Fehler erreicht
+        cursor.execute("DELETE FROM manual_events WHERE id = ?", (event_db_id,))
+        conn.commit()
+        
+    except sqlite3.Error as e:
+        messagebox.showerror("Datenbankfehler", f"Ein Fehler ist aufgetreten: {e}")
+    finally:
+        if conn:
             conn.close()
-            # Neuzeichnen der Timeline, um die Änderung zu visualisieren
-            draw_timeline(displayed_date)
-        except sqlite3.Error as e:
-            messagebox.showerror("Datenbankfehler", f"Eintrag konnte nicht gelöscht werden: {e}")
 
-# --- HINZUGEFÜGT: Funktion zum Anzeigen des Kontextmenüs (VERBESSERTE VERSION) ---
+    draw_timeline(displayed_date)
+
 def show_context_menu(event):
     """Findet das Element direkt unter dem Mauszeiger und zeigt ein Kontextmenü an."""
     # Verwende find_withtag("current"), um das Element direkt unter dem Cursor zu finden.
@@ -403,8 +602,8 @@ def on_date_selected(event):
 def open_settings_dialog():
     # Die innere Funktion wird angepasst, um den Autostart zu steuern
     def save_and_close():
-        settings_manager.save_setting('redmine_url', url_var.get())
-        settings_manager.save_setting('redmine_token', token_var.get())
+        # settings_manager.save_setting('redmine_url', url_var.get())
+        # settings_manager.save_setting('redmine_token', token_var.get())
         
         # Neuen Autostart-Status basierend auf der Checkbox setzen
         try:
@@ -441,18 +640,18 @@ def open_settings_dialog():
     frame.columnconfigure(1, weight=1)
 
     # Lade die Einstellungen über den neuen Manager
-    url_var = tk.StringVar(value=settings_manager.load_setting('redmine_url'))
-    token_var = tk.StringVar(value=settings_manager.load_setting('redmine_token'))
+    # url_var = tk.StringVar(value=settings_manager.load_setting('redmine_url'))
+    # token_var = tk.StringVar(value=settings_manager.load_setting('redmine_token'))
     
     # Lade den aktuellen Autostart-Status für die Checkbox
     autostart_var = tk.BooleanVar(value=settings_manager.is_autostart_enabled())
 
-    # --- Widgets ---
-    ttk.Label(frame, text="Redmine URL:").grid(row=0, column=0, sticky="w", pady=5)
-    ttk.Entry(frame, textvariable=url_var).grid(row=0, column=1, sticky="ew", padx=5)
+    # # --- Widgets ---
+    # ttk.Label(frame, text="Redmine URL:").grid(row=0, column=0, sticky="w", pady=5)
+    # ttk.Entry(frame, textvariable=url_var).grid(row=0, column=1, sticky="ew", padx=5)
 
-    ttk.Label(frame, text="Redmine Token:").grid(row=1, column=0, sticky="w", pady=5)
-    ttk.Entry(frame, textvariable=token_var, show='*').grid(row=1, column=1, sticky="ew", padx=5)
+    # ttk.Label(frame, text="Redmine Token:").grid(row=1, column=0, sticky="w", pady=5)
+    # ttk.Entry(frame, textvariable=token_var, show='*').grid(row=1, column=1, sticky="ew", padx=5)
 
     # HINZUGEFÜGT: Checkbox für den Autostart
     autostart_check = ttk.Checkbutton(frame, text="Automatisch mit Windows starten", variable=autostart_var)
@@ -575,3 +774,7 @@ if __name__ == "__main__":
     root.after(500, scroll_to_now)
 
     root.mainloop()
+    
+    
+    
+    
