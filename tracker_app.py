@@ -9,6 +9,15 @@ from datetime import datetime, timedelta, date
 # --- Globale Konstanten ---
 BLOCK_DURATION_MINUTES = 5
 PIXELS_PER_MINUTE = 5
+# --- Globale Design-Konstanten ---
+COLOR_BG = "#2e2e2e"
+COLOR_CANVAS_BG = "#3a3a3a"
+COLOR_FG = "#d0d0d0"
+COLOR_GRID_LINE = "#4a4a4a"
+COLOR_HOUR_LINE = "#888888"
+FONT_NORMAL = ("Segoe UI", 9)
+FONT_BOLD = ("Segoe UI", 9, "bold")
+FONT_TITLE = ("Segoe UI", 14, "bold")
 
 # --- Globale Variable für das Datum ---
 displayed_date = date.today()
@@ -95,9 +104,11 @@ def draw_timeline(target_date):
     for hour in range(24):
         for minute in range(0, 60, 5):
             y_pos = (hour * 60 + minute) * PIXELS_PER_MINUTE
+            canvas.create_line(75, y_pos, 780, y_pos, fill=COLOR_GRID_LINE)
+
             if minute == 0:
-                canvas.create_line(60, y_pos, 70, y_pos, fill="black")
-                canvas.create_text(55, y_pos, text=f"{hour:02d}:00", anchor="e", font=("Segoe UI", 9, "bold"))
+                canvas.create_line(60, y_pos, 70, y_pos, fill="white")
+                canvas.create_text(55, y_pos, text=f"{hour:02d}:00", anchor="e", font=("Segoe UI", 9, "bold"),fill="white")
             else:
                 canvas.create_line(60, y_pos, 65, y_pos, fill="gray")
                 canvas.create_text(55, y_pos, text=f"{hour:02d}:{minute:02d}", anchor="e", font=("Segoe UI", 7), fill="gray")
@@ -128,16 +139,16 @@ def draw_timeline(target_date):
             app_colors[block["app"]] = colors[len(app_colors) % len(colors)]
         color = app_colors[block["app"]]
         
-        canvas.create_rectangle(75, y_start, 780, y_start + height, fill=color, outline="white", width=0.5)
+        canvas.create_rectangle(85, y_start, 770, y_start + height, fill=color,  width=0)
         
         if height > 15:
             # Text für App und Titel (links oben)
             display_text = f"{block['app']} - {block['title'][:60]}"
-            canvas.create_text(85, y_start + 5, text=display_text, anchor="nw", font=("Segoe UI", 8, "bold"), fill="white")
+            canvas.create_text(95, y_start + 5, text=display_text, anchor="nw", font=("Segoe UI", 8, "bold"), fill="white")
 
             # NEU: Text für die Dauer (rechts oben)
             duration_text = f"{block['duration']} min"
-            canvas.create_text(775, y_start + 5, text=duration_text, anchor="ne", font=("Segoe UI", 8, "bold"), fill="white")
+            canvas.create_text(760, y_start + 5, text=duration_text, anchor="ne", font=("Segoe UI", 8, "bold"), fill="white")
 
 
     if target_date == date.today():
@@ -148,7 +159,6 @@ def draw_timeline(target_date):
         # Zeichne die rote Linie über die gesamte Timeline-Breite
         canvas.create_line(0, y_pos_now, 780, y_pos_now, fill="red", width=2)
 
-   
     canvas.config(scrollregion=canvas.bbox("all"))
     
     if target_date == date.today():
@@ -174,50 +184,54 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.title("Timeline Tracker")
     root.geometry("850x700")
+    root.configure(bg=COLOR_BG)
 
-    nav_frame = tk.Frame(root, pady=5)
-    nav_frame.pack(fill="x")
+    # --- Theming mit ttk.Style ---
+    style = ttk.Style(root)
+    # Wähle ein Theme, das eine gute Basis ist (clam, alt, default)
+    style.theme_use("clam") 
+    
+    # Konfiguriere das Styling für verschiedene Widgets
+    style.configure(".", background=COLOR_BG, foreground=COLOR_FG, font=FONT_NORMAL)
+    style.configure("TFrame", background=COLOR_BG)
+    style.configure("TLabel", background=COLOR_BG, foreground=COLOR_FG)
+    style.configure("TButton", background="#4a4a4a", foreground=COLOR_FG, borderwidth=0)
+    style.map("TButton", background=[("active", "#5a5a5a")])
 
-    prev_button = tk.Button(nav_frame, text="<", command=show_previous_day)
+    # --- Navigationsleiste ---
+    nav_frame = ttk.Frame(root, padding=(10, 5))
+    nav_frame.pack(fill="x", side="top")
+
+    prev_button = ttk.Button(nav_frame, text="<", command=show_previous_day)
     prev_button.pack(side="left", padx=10)
 
     date_label_var = tk.StringVar()
-    date_label = tk.Label(nav_frame, textvariable=date_label_var, font=("Segoe UI", 12, "bold"))
-    date_label.pack(side="left", expand=True)
+    date_label = ttk.Label(nav_frame, textvariable=date_label_var, font=FONT_TITLE, anchor="center")
+    date_label.pack(side="left", expand=True, fill="x")
 
-    next_button = tk.Button(nav_frame, text=">", command=show_next_day)
+    next_button = ttk.Button(nav_frame, text=">", command=show_next_day)
     next_button.pack(side="right", padx=10)
     
-    main_frame = tk.Frame(root)
+    # --- Hauptbereich mit Canvas ---
+    main_frame = ttk.Frame(root, padding=(10, 0, 10, 10))
     main_frame.pack(fill="both", expand=True)
 
-    canvas = tk.Canvas(main_frame, bg="#f0f0f0")
+    canvas = tk.Canvas(main_frame, bg=COLOR_CANVAS_BG, highlightthickness=0, relief='ridge')
     scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
     canvas.configure(yscrollcommand=scrollbar.set)
     scrollbar.pack(side="right", fill="y")
     canvas.pack(side="left", fill="both", expand=True)
 
     def on_mousewheel(event):
-        """Plattformunabhängige Funktion zum Scrollen mit dem Mausrad."""
-        # Auf Windows und macOS wird event.delta verwendet
-        # event.delta ist normalerweise 120 (hoch) oder -120 (runter)
-        # Wir teilen durch 120, um die Scroll-Geschwindigkeit zu normalisieren
         if event.delta:
              canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        # Auf Linux werden die Tasten 4 (hoch) und 5 (runter) verwendet
         else:
-            if event.num == 4:
-                canvas.yview_scroll(-1, "units")
-            elif event.num == 5:
-                canvas.yview_scroll(1, "units")
+            if event.num == 4: canvas.yview_scroll(-1, "units")
+            elif event.num == 5: canvas.yview_scroll(1, "units")
 
-    # Wir binden die Funktion an das Mausrad-Ereignis im gesamten Fenster.
-    # `bind_all` sorgt dafür, dass das Scrollen funktioniert, solange das
-    # Fenster aktiv ist, auch wenn der Mauszeiger nicht direkt über dem Canvas liegt.
     root.bind_all("<MouseWheel>", on_mousewheel)
-    root.bind_all("<Button-4>", on_mousewheel) # Für Linux Scroll-Up
-    root.bind_all("<Button-5>", on_mousewheel) # Für Linux Scroll-Down
-
+    root.bind_all("<Button-4>", on_mousewheel)
+    root.bind_all("<Button-5>", on_mousewheel)
 
     def scroll_to_now():
         if displayed_date == date.today():
