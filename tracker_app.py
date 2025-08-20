@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, date
 
 # --- Globale Konstanten ---
 BLOCK_DURATION_MINUTES = 5
-PIXELS_PER_MINUTE = 15
+PIXELS_PER_MINUTE = 5
 
 # --- Globale Variable für das Datum ---
 displayed_date = date.today()
@@ -139,6 +139,16 @@ def draw_timeline(target_date):
             duration_text = f"{block['duration']} min"
             canvas.create_text(775, y_start + 5, text=duration_text, anchor="ne", font=("Segoe UI", 8, "bold"), fill="white")
 
+
+    if target_date == date.today():
+        now = datetime.now()
+        minutes_now = now.hour * 60 + now.minute
+        y_pos_now = minutes_now * PIXELS_PER_MINUTE
+
+        # Zeichne die rote Linie über die gesamte Timeline-Breite
+        canvas.create_line(0, y_pos_now, 780, y_pos_now, fill="red", width=2)
+
+   
     canvas.config(scrollregion=canvas.bbox("all"))
     
     if target_date == date.today():
@@ -186,6 +196,28 @@ if __name__ == "__main__":
     canvas.configure(yscrollcommand=scrollbar.set)
     scrollbar.pack(side="right", fill="y")
     canvas.pack(side="left", fill="both", expand=True)
+
+    def on_mousewheel(event):
+        """Plattformunabhängige Funktion zum Scrollen mit dem Mausrad."""
+        # Auf Windows und macOS wird event.delta verwendet
+        # event.delta ist normalerweise 120 (hoch) oder -120 (runter)
+        # Wir teilen durch 120, um die Scroll-Geschwindigkeit zu normalisieren
+        if event.delta:
+             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        # Auf Linux werden die Tasten 4 (hoch) und 5 (runter) verwendet
+        else:
+            if event.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(1, "units")
+
+    # Wir binden die Funktion an das Mausrad-Ereignis im gesamten Fenster.
+    # `bind_all` sorgt dafür, dass das Scrollen funktioniert, solange das
+    # Fenster aktiv ist, auch wenn der Mauszeiger nicht direkt über dem Canvas liegt.
+    root.bind_all("<MouseWheel>", on_mousewheel)
+    root.bind_all("<Button-4>", on_mousewheel) # Für Linux Scroll-Up
+    root.bind_all("<Button-5>", on_mousewheel) # Für Linux Scroll-Down
+
 
     def scroll_to_now():
         if displayed_date == date.today():
