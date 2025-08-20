@@ -30,6 +30,7 @@ OutputBaseFilename=TimelineTracker
 SolidCompression=yes
 WizardStyle=modern
 
+
 [Languages]
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
