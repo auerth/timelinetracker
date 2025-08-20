@@ -17,6 +17,7 @@ from search_dialog import SearchDialog
 import json
 # Importiere die Pfade aus deiner Konfigurationsdatei
 from app_config import APP_DIR, CONFIG_PATH, DB_PATH, initialize_config
+from settings_dialog import SettingsDialog
 
 
 # --- (Alle globalen Konstanten und Variablen bleiben gleich) ---
@@ -439,6 +440,7 @@ def end_drag(event):
         # CORRECTION: Correctly call the SearchDialog with all required arguments
         color_config = {
             'canvas_bg': COLOR_CANVAS_BG,
+            'bg': COLOR_BG,
             'fg': COLOR_FG,
             'manual_block': COLOR_MANUAL_BLOCK
         }
@@ -599,103 +601,20 @@ def on_date_selected(event):
         displayed_date = new_date
         draw_timeline(displayed_date)
         scroll_to_now()
+# Die alte, lange Funktion "open_settings_dialog" wird komplett gelöscht.
+# Stattdessen rufst du den Dialog jetzt so auf:
 
 def open_settings_dialog():
-    # --- INNERE FUNKTIONEN FÜR DIE BUTTONS ---
-    def save_and_close():
-        try:
-            settings_manager.set_autostart(autostart_var.get())
-        except Exception as e:
-            messagebox.showerror("Fehler", f"Autostart konnte nicht geändert werden:\n{e}", parent=settings_window)
-
-        messagebox.showinfo("Gespeichert", "Einstellungen wurden erfolgreich gespeichert.", parent=settings_window)
-        settings_window.destroy()
-
-    def open_app_directory():
-        """Öffnet den Roaming-Ordner der Anwendung im Explorer."""
-        try:
-            # os.startfile() ist der direkteste Weg unter Windows
-            os.startfile(APP_DIR)
-        except Exception as e:
-            messagebox.showerror("Fehler", f"Verzeichnis konnte nicht geöffnet werden:\n{e}", parent=settings_window)
-
-    def open_config_file():
-        """Öffnet die Konfigurationsdatei mit dem Standard-Editor."""
-        try:
-            os.startfile(CONFIG_PATH)
-        except Exception as e:
-            messagebox.showerror("Fehler", f"Konfigurationsdatei konnte nicht geöffnet werden:\n{e}", parent=settings_window)
-
-    def delete_database():
-        """Löscht die lokale Datenbank nach einer Bestätigungsabfrage."""
-        if messagebox.askyesno("Datenbank wirklich löschen?",
-                               "Sind Sie sicher? Alle lokal gespeicherten Zeiteinträge werden unwiderruflich gelöscht. "
-                               "Die Anwendung muss danach neu gestartet werden.",
-                               parent=settings_window):
-            try:
-                # Wichtig: Hier sollte idealerweise die DB-Verbindung geschlossen werden.
-                # Die einfachste und sicherste Methode ist, die App danach zu beenden.
-                if os.path.exists(DB_PATH):
-                    os.remove(DB_PATH)
-                    messagebox.showinfo("Erfolg", "Die Datenbank wurde gelöscht. Die Anwendung wird jetzt beendet.", parent=settings_window)
-                    root.destroy() # Beendet die Hauptanwendung
-                else:
-                    messagebox.showinfo("Hinweis", "Die Datenbank existiert bereits nicht mehr.", parent=settings_window)
-            except Exception as e:
-                messagebox.showerror("Fehler", f"Datenbank konnte nicht gelöscht werden:\n{e}", parent=settings_window)
-
-    # --- FENSTER-SETUP ---
-    settings_window = tk.Toplevel(root)
-    settings_window.title("Einstellungen")
-    settings_window.resizable(False, False)
-    settings_window.transient(root)
-    settings_window.grab_set()
-    
-    # Fensterhöhe anpassen für die neuen Buttons
-    win_width = 400
-    win_height = 350 # Erhöht für den neuen Bereich
-
-    # (Code zum Zentrieren des Fensters bleibt unverändert)
-    root_x = root.winfo_x()
-    root_y = root.winfo_y()
-    root_width = root.winfo_width()
-    root_height = root.winfo_height()
-    pos_x = root_x + (root_width // 2) - (win_width // 2)
-    pos_y = root_y + (root_height // 2) - (win_height // 2)
-    settings_window.geometry(f'{win_width}x{win_height}+{pos_x}+{pos_y}')
-    settings_window.configure(bg=COLOR_BG)
-    
-    frame = ttk.Frame(settings_window, padding=20)
-    frame.pack(fill="both", expand=True)
-    frame.columnconfigure(1, weight=1)
-
-    # --- VARIABLEN ---
-    autostart_var = tk.BooleanVar(value=settings_manager.is_autostart_enabled())
-
-    # --- WIDGETS ---
-    autostart_check = ttk.Checkbutton(frame, text="Automatisch mit Windows starten", variable=autostart_var)
-    autostart_check.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 15))
-    
-    # --- NEU: WARTUNGS-BEREICH ---
-    maintenance_frame = ttk.LabelFrame(frame, text="Wartung & Fehlerbehebung", padding=10)
-    maintenance_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
-    maintenance_frame.columnconfigure(0, weight=1) # Buttons zentrieren
-
-    btn_open_dir = ttk.Button(maintenance_frame, text="Daten-Ordner öffnen", command=open_app_directory)
-    btn_open_dir.pack(fill='x', pady=2)
-    
-    btn_open_config = ttk.Button(maintenance_frame, text="Konfigurationsdatei bearbeiten", command=open_config_file)
-    btn_open_config.pack(fill='x', pady=2)
-
-    btn_delete_db = ttk.Button(maintenance_frame, text="Lokale Datenbank löschen...", command=delete_database)
-    btn_delete_db.pack(fill='x', pady=(2, 0))
-    
-    # --- SPEICHERN/ABBRECHEN BUTTONS ---
-    button_frame = ttk.Frame(frame)
-    button_frame.grid(row=2, column=0, columnspan=2, pady=(20, 0))
-    
-    ttk.Button(button_frame, text="Speichern", command=save_and_close).pack(side="left", padx=10)
-    ttk.Button(button_frame, text="Abbrechen", command=settings_window.destroy).pack(side="left")
+    # Definiere die Farben (hole sie aus deiner globalen Konfiguration)
+    colors = {
+        'bg': "#2e2e2e",
+        'canvas_bg': "#3a3a3a",
+        'fg': "#d0d0d0",
+        'manual_block': "#3a86ff",
+        'grid_line': "#4a4a4a"
+    }
+    # Erstelle eine Instanz des neuen Dialogs
+    SettingsDialog(root, "Einstellungen", colors, settings_manager, APP_DIR, CONFIG_PATH, DB_PATH)
 
 
 # --- Haupt-UI-Setup ---
@@ -715,6 +634,27 @@ if __name__ == "__main__":
         root.iconbitmap("icon.ico")
     except tk.TclError:
         print("WARNUNG: 'icon.ico' nicht gefunden oder ungültig.")
+        
+    # --- ANFANG: Titelleiste mit ctypes auf Dunkelmodus umstellen ---
+    # Nur für Windows 10 (Version 1809+) und Windows 11
+    try:
+        # Importiere die ctypes-Bibliothek
+        import ctypes
+        
+        # Hole den "Window Handle" (HWND), eine eindeutige ID für dein Fenster
+        # Wichtig: Das Fenster muss erst gezeichnet werden, daher das update_idletasks()
+        root.update_idletasks() 
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+
+        # Setze das Fenster-Attribut für den Dark Mode
+        # DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+        value = ctypes.c_int(2)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(value), ctypes.sizeof(value))
+
+    except Exception as e:
+        print(f"Konnte den Dark Mode für die Titelleiste nicht aktivieren: {e}")
+        # Das Programm läuft normal weiter, nur die Leiste bleibt hell.
+    # --- ENDE: Code für die Titelleiste ---
     style = ttk.Style(root)
     style.theme_use("clam") 
     style.configure(".", background=COLOR_BG, foreground=COLOR_FG, font=FONT_NORMAL)
@@ -729,7 +669,7 @@ if __name__ == "__main__":
                       arrowcolor=COLOR_FG,
                       bordercolor=COLOR_GRID_LINE)
 
-    nav_frame = ttk.Frame(root, padding=(10, 5))
+    nav_frame = ttk.Frame(root, padding=(10, 20, 10, 10))
     nav_frame.pack(fill="x", side="top")
     
     ttk.Button(nav_frame, text="<", command=show_previous_day).pack(side="left", padx=5)
@@ -740,7 +680,7 @@ if __name__ == "__main__":
                            date_pattern='dd.mm.yyyy',
                            style='my.DateEntry',
                            borderwidth=0)
-    date_entry.pack(side="left", expand=True, fill="x", padx=10)
+    date_entry.pack(side="left", expand=False, fill="x", padx=10)
     date_entry.bind("<<DateEntrySelected>>", on_date_selected)
     
     ttk.Button(nav_frame, text=">", command=show_next_day).pack(side="left", padx=5)
@@ -756,9 +696,9 @@ if __name__ == "__main__":
     main_frame.rowconfigure(1, weight=1)
 
     auto_header_label = ttk.Label(main_frame, text="Automatisch erfasst", font=FONT_TITLE, anchor="w")
-    auto_header_label.grid(row=0, column=0, sticky="w", padx=(TIME_AXIS_WIDTH, 0), pady=(5,0))
+    auto_header_label.grid(row=0, column=0, sticky="w", padx=(TIME_AXIS_WIDTH, 0), pady=(5,5))
     manual_header_label = ttk.Label(main_frame, text="Manuelle Zuweisung", font=FONT_TITLE, anchor="w")
-    manual_header_label.grid(row=0, column=2, sticky="w", padx=(TIME_AXIS_WIDTH, 0), pady=(5,0))
+    manual_header_label.grid(row=0, column=2, sticky="w", padx=(TIME_AXIS_WIDTH, 0), pady=(5,5))
 
     canvas_auto = tk.Canvas(main_frame, bg=COLOR_CANVAS_BG, highlightthickness=0)
     canvas_auto.grid(row=1, column=0, sticky="nsew", padx=(0, GAP_WIDTH // 2))
