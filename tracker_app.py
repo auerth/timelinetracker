@@ -6,6 +6,13 @@ import threading
 import time
 from datetime import datetime, timedelta, date
 from tkcalendar import DateEntry
+import settings_manager # HINZUGEFÜGT
+
+# HINZUGEFÜGT: Imports für das Tray-Icon
+import threading
+from PIL import Image, ImageDraw
+import pystray
+
 
 # --- (Alle globalen Konstanten und Variablen bleiben gleich) ---
 # --- Globale Konstanten ---
@@ -36,43 +43,76 @@ drag_data = {"start_y": None, "temp_rect": None}
 resize_timer = None
 
 
-# --- (Datenbank-Setup, Tracking, Block-Merging, Settings-Funktionen unverändert) ---
-def setup_database():
-    conn = sqlite3.connect('timeline_tracker_5min.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS activity_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, app_name TEXT, window_title TEXT,
-            start_time DATETIME UNIQUE, end_time DATETIME
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS manual_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, start_time DATETIME NOT NULL,
-            end_time DATETIME NOT NULL, description TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_manual_start_time ON manual_events (start_time)')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)
-    ''')
-    conn.commit()
-    conn.close()
+def create_icon_image():
+    """Erstellt programmatisch ein einfaches Icon-Bild."""
+    width = 64
+    height = 64
+    # Erstellt ein blaues Bild mit einem weißen "T" in der Mitte
+    image = Image.new('RGBA', (width, height), (58, 134, 255, 255))
+    dc = ImageDraw.Draw(image)
+    dc.rectangle((width // 4, height // 4, width * 3 // 4, height * 3 // 4), fill=(255, 255, 255, 255))
+    dc.rectangle((width // 3, height // 3, width * 2 // 3, height * 2 // 3), fill=(58, 134, 255, 255))
+    return image
 
-def save_setting(key, value):
-    conn = sqlite3.connect('timeline_tracker_5min.db')
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
-    conn.commit()
-    conn.close()
+def on_closing():
+    """Wird aufgerufen, wenn auf das 'X' geklickt wird. Versteckt das Fenster."""
+    root.withdraw()
 
-def load_setting(key):
-    conn = sqlite3.connect('timeline_tracker_5min.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
-    result = cursor.fetchone()
-    conn.close()
-    return result[0] if result else ""
+def show_window(icon, item):
+    """Zeigt das Hauptfenster wieder an."""
+    root.deiconify()
+    root.lift()
+    root.focus_force()
+
+def exit_app(icon, item):
+    """Beendet die Anwendung komplett."""
+    global tray_icon
+    if tray_icon:
+        tray_icon.stop()
+    root.destroy()
+    
+def setup_tray_icon():
+    """Erstellt und startet das System-Tray-Icon in einem separaten Thread."""
+    global tray_icon
+    
+    # Menü für das Rechtsklick-Kontextmenü definieren
+    menu = pystray.Menu(
+        pystray.MenuItem('Anzeigen', show_window, default=True),
+        pystray.MenuItem('Beenden', exit_app)
+    )
+    
+    # Icon-Bild erstellen
+    image = create_icon_image()
+    
+    # Das pystray-Icon-Objekt erstellen
+    tray_icon = pystray.Icon(
+        "TimelineTracker", 
+        image, 
+        "Timeline Tracker", 
+        menu
+    )
+
+    # Das Icon in einem separaten Thread ausführen, um die GUI nicht zu blockieren
+    # daemon=True sorgt dafür, dass der Thread beendet wird, wenn das Hauptprogramm endet
+    thread = threading.Thread(target=tray_icon.run, daemon=True)
+    thread.start()
+
+# Ersetze deine alte 'create_icon_image' Funktion hiermit:
+def create_icon_image():
+    """Lädt das Icon-Bild aus der Datei 'icon.png'."""
+    try:
+        # Pillow kann .png direkt für pystray verwenden
+        return Image.open("icon.png")
+    except FileNotFoundError:
+        print("WARNUNG: 'icon.png' nicht gefunden. Ein Standard-Icon wird erstellt.")
+        # Fallback, falls die Datei nicht gefunden wird, um einen Absturz zu verhindern
+        width = 64
+        height = 64
+        image = Image.new('RGBA', (width, height), (58, 134, 255, 255))
+        dc = ImageDraw.Draw(image)
+        dc.rectangle((width // 4, height // 4, width * 3 // 4, height * 3 // 4), fill=(255, 255, 255, 255))
+        dc.rectangle((width // 3, height // 3, width * 2 // 3, height * 2 // 3), fill=(58, 134, 255, 255))
+        return image
 
 def track_activity_in_blocks():
     conn = sqlite3.connect('timeline_tracker_5min.db')
@@ -361,54 +401,66 @@ def on_date_selected(event):
         scroll_to_now()
 
 def open_settings_dialog():
+    # Die innere Funktion wird angepasst, um den Autostart zu steuern
     def save_and_close():
-        save_setting('redmine_url', url_var.get())
-        save_setting('redmine_token', token_var.get())
+        settings_manager.save_setting('redmine_url', url_var.get())
+        settings_manager.save_setting('redmine_token', token_var.get())
+        
+        # Neuen Autostart-Status basierend auf der Checkbox setzen
+        try:
+            settings_manager.set_autostart(autostart_var.get())
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Autostart konnte nicht geändert werden:\n{e}", parent=settings_window)
+
         messagebox.showinfo("Gespeichert", "Einstellungen wurden erfolgreich gespeichert.", parent=settings_window)
         settings_window.destroy()
 
     settings_window = tk.Toplevel(root)
     settings_window.title("Einstellungen")
     settings_window.resizable(False, False)
-    settings_window.configure(bg=COLOR_BG)
     settings_window.transient(root)
     settings_window.grab_set()
     
-    # --- HINZUGEFÜGT: Logik zum Zentrieren des Fensters ---
-    
-    # Fenstergröße definieren
+    # Fenstergröße anpassen für die neue Checkbox
     win_width = 400
-    win_height = 200
+    win_height = 250 # Etwas höher gemacht
 
-    # Position und Größe des Hauptfensters abfragen
     root_x = root.winfo_x()
     root_y = root.winfo_y()
     root_width = root.winfo_width()
     root_height = root.winfo_height()
 
-    # X- und Y-Koordinaten für das neue Fenster berechnen
     pos_x = root_x + (root_width // 2) - (win_width // 2)
     pos_y = root_y + (root_height // 2) - (win_height // 2)
 
-    # Die berechnete Position und Größe anwenden
     settings_window.geometry(f'{win_width}x{win_height}+{pos_x}+{pos_y}')
+    settings_window.configure(bg=COLOR_BG)
     
-    # --- Ende des neuen Codes ---
-
     frame = ttk.Frame(settings_window, padding=20)
     frame.pack(fill="both", expand=True)
     frame.columnconfigure(1, weight=1)
 
+    # Lade die Einstellungen über den neuen Manager
+    url_var = tk.StringVar(value=settings_manager.load_setting('redmine_url'))
+    token_var = tk.StringVar(value=settings_manager.load_setting('redmine_token'))
+    
+    # Lade den aktuellen Autostart-Status für die Checkbox
+    autostart_var = tk.BooleanVar(value=settings_manager.is_autostart_enabled())
+
+    # --- Widgets ---
     ttk.Label(frame, text="Redmine URL:").grid(row=0, column=0, sticky="w", pady=5)
-    url_var = tk.StringVar(value=load_setting('redmine_url'))
     ttk.Entry(frame, textvariable=url_var).grid(row=0, column=1, sticky="ew", padx=5)
 
     ttk.Label(frame, text="Redmine Token:").grid(row=1, column=0, sticky="w", pady=5)
-    token_var = tk.StringVar(value=load_setting('redmine_token'))
     ttk.Entry(frame, textvariable=token_var, show='*').grid(row=1, column=1, sticky="ew", padx=5)
+
+    # HINZUGEFÜGT: Checkbox für den Autostart
+    autostart_check = ttk.Checkbutton(frame, text="Automatisch mit Windows starten", variable=autostart_var)
+    autostart_check.grid(row=2, column=0, columnspan=2, sticky="w", pady=(15, 0))
     
+    # --- Buttons ---
     button_frame = ttk.Frame(frame)
-    button_frame.grid(row=2, column=0, columnspan=2, pady=(20, 0))
+    button_frame.grid(row=3, column=0, columnspan=2, pady=(20, 0))
     
     ttk.Button(button_frame, text="Speichern", command=save_and_close).pack(side="left", padx=10)
     ttk.Button(button_frame, text="Abbrechen", command=settings_window.destroy).pack(side="left")
@@ -416,16 +468,20 @@ def open_settings_dialog():
 
 # --- Haupt-UI-Setup ---
 if __name__ == "__main__":
-    setup_database()
+    settings_manager.setup_database() 
     tracking_thread = threading.Thread(target=track_activity_in_blocks, daemon=True)
     tracking_thread.start()
-
     root = tk.Tk()
     root.title("Timeline Tracker")
     root.geometry(f"{WINDOW_WIDTH}x700")
     root.configure(bg=COLOR_BG)
     root.bind("<Configure>", on_resize)
-
+    root.protocol("WM_DELETE_WINDOW", on_closing)
+    # HINZUGEFÜGT: Setzt das Icon für die Titelleiste und die Taskleiste
+    try:
+        root.iconbitmap("icon.ico")
+    except tk.TclError:
+        print("WARNUNG: 'icon.ico' nicht gefunden oder ungültig.")
     style = ttk.Style(root)
     style.theme_use("clam") 
     style.configure(".", background=COLOR_BG, foreground=COLOR_FG, font=FONT_NORMAL)
@@ -513,7 +569,8 @@ if __name__ == "__main__":
                     scroll_pos = (bbox[1] - canvas_height / 3) / scrollregion_height
                     canvas_auto.yview_moveto(max(0, scroll_pos))
                     canvas_manual.yview_moveto(max(0, scroll_pos))
-
+    # HINZUGEFÜGT: Das Tray-Icon wird vor dem Start der mainloop eingerichtet
+    setup_tray_icon()
     root.after(100, lambda: draw_timeline(displayed_date))
     root.after(500, scroll_to_now)
 
