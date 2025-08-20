@@ -6,12 +6,13 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{68B0E312-38F5-4F7C-A0E5-BD0AAE33C800}
 AppName=Timeline Tracker
-AppVersion=10
-;AppVerName=Timeline Tracker 10
+AppVersion=1.0
+;AppVerName=Timeline Tracker 1.0
 AppPublisher=softwelop - Thorben Auer
 AppPublisherURL=https://www.softwelop.com
 AppSupportURL=https://www.softwelop.com
 AppUpdatesURL=https://www.softwelop.com
+SetupIconFile=../icon.ico
 DefaultDirName={autopf}\Timeline Tracker
 UninstallDisplayIcon={app}\tracker_app.exe
 ; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
@@ -37,7 +38,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "C:\Projekte\memtime_copy\dist\tracker_app.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Projekte\memtime_copy\dist\api_config.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Projekte\memtime_copy\dist\api_config.json.example"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Projekte\memtime_copy\dist\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Projekte\memtime_copy\dist\icon.png"; DestDir: "{app}"; Flags: ignoreversion
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files

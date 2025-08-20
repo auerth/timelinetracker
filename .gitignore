@@ -3,3 +3,4 @@ timeline_tracker_5min.db
 build/**
 dist/**
 tracker_app.spec
+installer/Output/**

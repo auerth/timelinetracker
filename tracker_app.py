@@ -604,7 +604,7 @@ def open_settings_dialog():
     # --- INNERE FUNKTIONEN FÜR DIE BUTTONS ---
     def save_and_close():
         try:
-            settings_manager.set_autostart(autostostart_var.get())
+            settings_manager.set_autostart(autostart_var.get())
         except Exception as e:
             messagebox.showerror("Fehler", f"Autostart konnte nicht geändert werden:\n{e}", parent=settings_window)
 
