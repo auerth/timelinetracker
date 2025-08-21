@@ -32,7 +32,8 @@ COLOR_CANVAS_BG = "#3a3a3a"
 COLOR_FG = "#d0d0d0"
 COLOR_GRID_LINE = "#4a4a4a"
 COLOR_HOUR_LINE = "#888888"
-COLOR_MANUAL_BLOCK = "#3a86ff"
+COLOR_MANUAL_BLOCK = "#f18557"
+COLOR_MANUAL_BLOCK_ACTIVE = "#f7ae67"
 FONT_NORMAL = ("Segoe UI", 9)
 FONT_BOLD = ("Segoe UI", 9, "bold")
 FONT_TITLE = ("Segoe UI", 12, "bold")
@@ -241,7 +242,7 @@ class TimelineTrackerApp:
             y_start = minutes_from_midnight * PIXELS_PER_MINUTE + Y_PADDING
             height = duration_min * PIXELS_PER_MINUTE
             tag_id = f"manual_event_{event_id}"
-            self.canvas_manual.create_rectangle(TIME_AXIS_WIDTH + 10, y_start, manual_width - 10, y_start + height, fill=COLOR_MANUAL_BLOCK, outline=COLOR_GRID_LINE, width=1, activefill="#5a9bff", tags=(tag_id,))
+            self.canvas_manual.create_rectangle(TIME_AXIS_WIDTH + 10, y_start, manual_width - 10, y_start + height, fill=COLOR_MANUAL_BLOCK, outline=COLOR_GRID_LINE, width=1, activefill=COLOR_MANUAL_BLOCK_ACTIVE, tags=(tag_id,))
             if height > 30:
                 y_top_line = y_start + 5
                 self.canvas_manual.create_text(TIME_AXIS_WIDTH + 20, y_top_line, text=f"{description}", anchor="nw", font=FONT_BOLD, fill="white", tags=(tag_id,))
@@ -479,7 +480,7 @@ class TimelineTrackerApp:
         style.configure("TLabel", background=COLOR_BG, foreground=COLOR_FG)
         style.configure("TButton", background="#4a4a4a", foreground=COLOR_FG, borderwidth=0)
         style.map("TButton", background=[("active", "#5a5a5a")])
-        style.configure('my.DateEntry', fieldbackground=COLOR_BG, background=COLOR_BG, foreground=COLOR_FG, arrowcolor=COLOR_FG, bordercolor=COLOR_GRID_LINE)
+        style.configure('my.DateEntry', fieldbackground=COLOR_BG, background=COLOR_BG, foreground=COLOR_FG, arrowcolor=COLOR_FG, bordercolor=COLOR_BG)
 
         nav_frame = ttk.Frame(self.root, padding=(10, 20, 10, 10))
         nav_frame.pack(fill="x", side="top")

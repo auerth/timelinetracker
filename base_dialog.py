@@ -24,6 +24,12 @@ class BaseDialog(simpledialog.Dialog):
             # Rahmenfarbe, wenn das Widget den Fokus hat
             bordercolor=[('focus', self.colors['manual_block'])]
         )
+        default_bg = style.lookup('TFrame', 'background')
+
+        # Name des neuen Stils: 'NoHover.TCheckbutton'
+        style.map('NoHover.TCheckbutton',
+                  background=[('active', default_bg)],
+                  indicatorbackground=[('active', default_bg)]) # Verhindert auch das Aufleuchten des Kästchens
         
         # Der Aufruf an die Elternklasse startet den Dialog
         super().__init__(parent, title=title)

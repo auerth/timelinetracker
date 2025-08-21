@@ -31,7 +31,13 @@ class SettingsDialog(BaseDialog):
         frame.columnconfigure(1, weight=1)
 
         # --- WIDGETS ---
-        autostart_check = ttk.Checkbutton(frame, text="Automatisch mit Windows starten", variable=self.autostart_var)
+# Erstelle den Checkbutton und weise ihm den neuen Stil zu
+        autostart_check = ttk.Checkbutton(
+            frame, 
+            text="Automatisch mit Windows starten", 
+            variable=self.autostart_var,
+            style='NoHover.TCheckbutton' # Wende den benutzerdefinierten Stil an
+        )
         autostart_check.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 15))
         
         maintenance_frame = ttk.LabelFrame(frame, text="Wartung & Fehlerbehebung", padding=10)
