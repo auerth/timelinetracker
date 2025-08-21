@@ -1,57 +1,56 @@
+<img src="https://github.com/auerth/timelinetracker/blob/main/icon.png" width="250">
 # TimelineTracker
 
-<img src="https://github.com/auerth/timelinetracker/blob/main/icon.png" width="250">
+**An open-source tool for automatically tracking your PC activities and seamlessly assigning time to your projects.**
 
-**Ein Open-Source-Tool zur automatischen Erfassung deiner PC-Aktivitäten und zur nahtlosen Zuweisung von Zeit auf deine Projekte.**
-
-TimelineTracker ist eine Windows-Desktop-Anwendung, die im Hintergrund läuft und alle 5 Minuten das aktive Fenster aufzeichnet. Die gesammelten Daten werden in einer visuellen Timeline dargestellt, die es dir ermöglicht, deine Zeit einfach und effizient auf Aufgaben in deinem Projektmanagement-Tool (z.B. Redmine, Jira) zu buchen.
+TimelineTracker is a Windows desktop application that runs in the background and records the active window every 5 minutes. The collected data is displayed in a visual timeline, allowing you to easily and efficiently log your time to tasks in your project management tool (e.g., Redmine, Jira).
 
 ---
 
-## ✨ Funktionen
+## ✨ Features
 
-* **Automatische Zeiterfassung**: Erfasst kontinuierlich die Nutzung von Anwendungen und Fenstertiteln in 5-Minuten-Intervallen.
-* **Visuelle Timeline**: Zwei parallele Timelines zur übersichtlichen Darstellung von automatisch erfassten Aktivitäten und manuell zugewiesenen Zeitblöcken.
-* **Manuelle Zuweisung per Drag & Drop**: Erstelle und buche Zeitblöcke einfach durch Aufziehen mit der Maus.
-* **Flexible API-Anbindung**: Verbinde den Tracker über eine simple JSON-Konfiguration mit praktisch jedem Projektmanagement-Tool, das eine REST-API anbietet.
-* **Intelligente Task-Suche**: Suche direkt in der App nach Aufgaben aus deinem System, um Zeit korrekt zu verbuchen.
-* **Open Source**: Der gesamte Quellcode ist frei verfügbar. Passe den Tracker an deine Bedürfnisse an oder hilf mit, ihn zu verbessern!
+* **Automatic Time Tracking**: Continuously records application usage and window titles in 5-minute intervals.
+* **Visual Timeline**: Two parallel timelines provide a clear overview of automatically tracked activities and manually assigned time blocks.
+* **Manual Assignment via Drag & Drop**: Create and log time blocks easily by dragging with the mouse.
+* **Flexible API Integration**: Connect the tracker to virtually any project management tool with a simple JSON configuration and REST API.
+* **Smart Task Search**: Search for tasks directly within the app to log time correctly.
+* **Open Source**: The full source code is freely available. Customize the tracker to your needs or help improve it!
 
 ---
 
 ## 🚀 Getting Started
 
-Folge diesen Schritten, um TimelineTracker zu installieren und zu verwenden.
+Follow these steps to install and use TimelineTracker.
 
 ### 1. Installation
 
-1.  Lade den neuesten Installer (`TimelineTracker.exe`) aus dem [Releases-Bereich](https://github.com/softwelop/timelinetracker/releases) herunter.
-2.  Führe die heruntergeladene `.exe`-Datei aus und folge den Anweisungen des Installationsassistenten.
-3.  Nach der Installation startet die Anwendung automatisch. Du findest sie als Icon in deiner Taskleiste.
+1.  Download the latest installer (`TimelineTracker.exe`) from the [Releases page](https://github.com/softwelop/timelinetracker/releases).
+2.  Run the downloaded `.exe` file and follow the instructions in the installation wizard.
+3.  After installation, the application starts automatically. You will find it as an icon in your taskbar.
 
-### 2. Konfiguration
+### 2. Configuration
 
-Beim ersten Start wird automatisch eine Konfigurationsdatei `api_config.json` in deinem Benutzerverzeichnis erstellt.
+On first start, a configuration file `api_config.json` is automatically created in your user directory.
 
-* **Pfad**: `C:\Benutzer\DEIN_BENUTZERNAME\TimelineTracker\api_config.json`
-* Du kannst diesen Ordner auch direkt über das Einstellungsmenü (⚙️) in der App öffnen.
+* **Path**: `C:\Users\YOUR_USERNAME\TimelineTracker\api_config.json`
+* You can also open this folder directly via the settings menu (⚙️) in the app.
 
-Passe diese Datei an, um TimelineTracker mit deinem Projektmanagement-Tool zu verbinden. Eine detaillierte Erklärung der Konfiguration findest du unten.
+Edit this file to connect TimelineTracker to your project management tool. A detailed explanation of the configuration is provided below.
 
 ---
 
-## ⚙️ Die `api_config.json` Konfiguration
+## ⚙️ The `api_config.json` Configuration
 
-Diese Datei ist das Herzstück der Anbindung an externe Systeme. Hier definierst du, wie der Tracker mit der API deines Projektmanagement-Tools kommuniziert.
+This file is the core of integration with external systems. Here you define how the tracker communicates with your project management tool's API.
 
-### Beispiel (`api_config.json`)
+### Example (`api_config.json`)
 
 ```json
 {
-  "api_base_url": "[https://dein-system.com/]",
+  "api_base_url": "[https://your-system.com/]",
   "api_headers": {
     "Content-Type": "application/json",
-    "X-Redmine-API-Key": "DEIN_API_SCHLÜSSEL"
+    "X-Redmine-API-Key": "YOUR_API_KEY"
   },
   "endpoints": {
     "log_time": {
@@ -89,54 +88,54 @@ Diese Datei ist das Herzstück der Anbindung an externe Systeme. Hier definierst
 }
 ```
 
-### Erklärung der Felder
+### Field Explanation
 
-* `api_base_url`: Die Basis-URL deiner API (z.B. `https://redmine.softwelop.com/`).
-* `api_headers`: Ein Objekt für HTTP-Header. Hier kommt typischerweise dein API-Schlüssel oder ein Authentifizierungs-Token hinein.
-* `endpoints`: Definiert die drei Aktionen, die der Tracker ausführen kann:
-    * `log_time`: Zeit buchen.
-    * `search_issue`: Nach einer Aufgabe suchen.
-    * `delete_time_entry`: Eine Zeitbuchung löschen.
-* **Parameter innerhalb eines Endpoints**:
-    * `method`: Die HTTP-Methode (`GET`, `POST`, `DELETE`).
-    * `path`: Der API-Pfad, der an die `api_base_url` angehängt wird. Platzhalter wie `{time_entry_id}` werden automatisch ersetzt.
-    * `body`: Die JSON-Struktur für `POST`-Requests. Die Platzhalter `{issue_id}`, `{time_decimal}` und `{comment}` werden vom Tracker gefüllt.
-    * `params`: URL-Parameter für `GET`-Requests. `{query}` wird durch die Sucheingabe ersetzt.
-    * `response_mapping`: Definiert, wie die API-Antwort interpretiert wird.
-        * `results_path`: Der Pfad zum Array der Ergebnisse (z.B. `issues`).
-        * `display_field`: Das Feld, das in der Suchliste angezeigt wird (z.B. `subject`).
-        * `id_field`: Das Feld, das die eindeutige ID eines Eintrags enthält.
+* `api_base_url`: The base URL of your API (e.g., `https://redmine.softwelop.com/`).
+* `api_headers`: An object for HTTP headers. Typically includes your API key or an authentication token.
+* `endpoints`: Defines the three actions the tracker can perform:
+    * `log_time`: Log time.
+    * `search_issue`: Search for a task.
+    * `delete_time_entry`: Delete a time entry.
+* **Parameters within an endpoint**:
+    * `method`: The HTTP method (`GET`, `POST`, `DELETE`).
+    * `path`: The API path appended to the `api_base_url`. Placeholders like `{time_entry_id}` are replaced automatically.
+    * `body`: The JSON structure for `POST` requests. Placeholders `{issue_id}`, `{time_decimal}`, and `{comment}` are filled by the tracker.
+    * `params`: URL parameters for `GET` requests. `{query}` is replaced with the search input.
+    * `response_mapping`: Defines how the API response is interpreted.
+        * `results_path`: Path to the array of results (e.g., `issues`).
+        * `display_field`: Field displayed in the search list (e.g., `subject`).
+        * `id_field`: Field containing the unique ID of an entry.
 
 ---
 
-## 🛠️ Build-Prozess (für Entwickler)
+## 🛠️ Build Process (for Developers)
 
-Um die Anwendung aus dem Quellcode selbst zu bauen, benötigst du Python und die in `requirements.txt` (falls vorhanden) gelisteten Pakete.
+To build the application from source, you need Python and the packages listed in `requirements.txt` (if available).
 
-1.  **Abhängigkeiten installieren**:
+1.  **Install dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
-2.  **Executable erstellen**:
-    Führe die `build.bat`-Datei aus. Diese verwendet `PyInstaller`, um eine einzelne `.exe`-Datei im `dist`-Ordner zu erstellen und kopiert alle notwendigen Zusatzdateien (Icons, Beispiel-Konfig).
-3.  **Installer erstellen**:
-    * Installiere [Inno Setup](https://jrsoftware.org/isinfo.php).
-    * Öffne die Datei `installer/installer_project.iss` mit Inno Setup.
-    * Passe die Pfade in der `[Files]`-Sektion an, sodass sie auf die Dateien in deinem `dist`-Ordner zeigen.
-    * Kompiliere das Skript in Inno Setup, um die `TimelineTracker.exe`-Installationsdatei zu erzeugen.
+2.  **Create executable**:
+    Run the `build.bat` file. It uses `PyInstaller` to create a single `.exe` in the `dist` folder and copies all necessary additional files (icons, example config).
+3.  **Create installer**:
+    * Install [Inno Setup](https://jrsoftware.org/isinfo.php).
+    * Open `installer/installer_project.iss` in Inno Setup.
+    * Adjust the paths in the `[Files]` section to point to the files in your `dist` folder.
+    * Compile the script in Inno Setup to produce the `TimelineTracker.exe` installer.
 
 ---
 
 ## 🤝 Contributing
 
-Beiträge sind herzlich willkommen! Wenn du einen Fehler findest oder eine neue Funktion vorschlagen möchtest, erstelle bitte ein [Issue](https://github.com/softwelop/timelinetracker/issues). Wenn du Code beisteuern möchtest, erstelle einen Fork des Repositories und sende einen Pull Request.
+Contributions are welcome! If you find a bug or want to suggest a feature, please create an [issue](https://github.com/softwelop/timelinetracker/issues). To contribute code, fork the repository and submit a pull request.
 
 ---
 
-## 📄 Lizenz & Nutzung
+## 📄 License & Usage
 
-TimelineTracker ist kostenlos und darf frei verwendet, modifiziert und weitergegeben werden.
+TimelineTracker is free and may be used, modified, and redistributed.
 
-Die einzige Bedingung ist die **Nennung des ursprünglichen Autors** (softwelop - Thorben Auer) in abgeleiteten Werken oder bei einer Weiterverbreitung.
+The only condition is **crediting the original author** (softwelop - Thorben Auer) in derivative works or redistribution.
 
-**Was bedeutet "Nennung"?** Wenn du den Code in deinem eigenen Projekt verwendest, erwähne bitte den Ursprung – zum Beispiel in deiner README, in den Credits deiner Anwendung oder in den Kommentaren deines Codes.
+**What does "credit" mean?** When using the code in your own project, please mention the origin – for example, in your README, in your app credits, or in your code comments.
