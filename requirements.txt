@@ -1,0 +1,17 @@
+# Erforderliche Bibliotheken für TimelineTracker
+
+# Für die GUI und Kalender-Widgets
+tkcalendar
+
+# Zum Abrufen des aktiven Fenstertitels
+PyGetWindow
+
+# Für das System-Tray-Icon
+pystray
+Pillow
+
+# Für die Erstellung von Autostart-Verknüpfungen unter Windows
+winshell
+
+# Für die Kommunikation mit der REST-API
+requests
