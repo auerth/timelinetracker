@@ -38,10 +38,10 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\Projekte\memtime_copy\dist\tracker_app.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Projekte\memtime_copy\dist\api_config.json.example"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Projekte\memtime_copy\dist\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Projekte\memtime_copy\dist\icon.png"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\tracker_app.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\api_config.json.example"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\icon.png"; DestDir: "{app}"; Flags: ignoreversion
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
