@@ -1,4 +1,5 @@
 <img src="https://github.com/auerth/timelinetracker/blob/main/icon.png" width="250">
+
 # TimelineTracker
 
 **An open-source tool for automatically tracking your PC activities and seamlessly assigning time to your projects.**
