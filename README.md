@@ -1,6 +1,6 @@
 # TimelineTracker
 
-![TimelineTracker Logo](https://github.com/auerth/timelinetracker/blob/main/icon.png=x250)
+![TimelineTracker Logo](https://github.com/auerth/timelinetracker/blob/main/icon.png =x250)
 
 **Ein Open-Source-Tool zur automatischen Erfassung deiner PC-Aktivitäten und zur nahtlosen Zuweisung von Zeit auf deine Projekte.**
 
