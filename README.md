@@ -25,7 +25,7 @@ Follow these steps to install and use TimelineTracker.
 
 ### 1. Installation
 
-1.  Download the latest installer (`TimelineTracker.exe`) from the [Releases page](https://github.com/softwelop/timelinetracker/releases).
+1.  Download the latest installer (`TimelineTracker.exe`) from the [Releases page](https://softwelop.com/timelinetracker.html).
 2.  Run the downloaded `.exe` file and follow the instructions in the installation wizard.
 3.  After installation, the application starts automatically. You will find it as an icon in your taskbar.
 
