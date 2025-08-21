@@ -2,7 +2,7 @@
 
 # Für die GUI und Kalender-Widgets
 tkcalendar
-
+pyinstaller
 # Zum Abrufen des aktiven Fenstertitels
 PyGetWindow
 

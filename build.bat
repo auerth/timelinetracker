@@ -1,4 +1,5 @@
 @echo off
+pip install -r requirements.txt
 REM --- Build EXE ---
 python -m PyInstaller --onefile --noconsole --icon=icon.ico tracker_app.py
 
