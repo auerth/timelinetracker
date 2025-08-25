@@ -10,12 +10,12 @@ TimelineTracker is a Windows desktop application that runs in the background and
 
 ## ✨ Features
 
-* **Automatic Time Tracking**: Continuously records application usage and window titles in 5-minute intervals.
-* **Visual Timeline**: Two parallel timelines provide a clear overview of automatically tracked activities and manually assigned time blocks.
-* **Manual Assignment via Drag & Drop**: Create and log time blocks easily by dragging with the mouse.
-* **Flexible API Integration**: Connect the tracker to virtually any project management tool with a simple JSON configuration and REST API.
-* **Smart Task Search**: Search for tasks directly within the app to log time correctly.
-* **Open Source**: The full source code is freely available. Customize the tracker to your needs or help improve it!
+- **Automatic Time Tracking**: Continuously records application usage and window titles in 5-minute intervals.
+- **Visual Timeline**: Two parallel timelines provide a clear overview of automatically tracked activities and manually assigned time blocks.
+- **Manual Assignment via Drag & Drop**: Create and log time blocks easily by dragging with the mouse.
+- **Flexible API Integration**: Connect the tracker to virtually any project management tool with a simple JSON configuration and REST API.
+- **Smart Task Search**: Search for tasks directly within the app to log time correctly.
+- **Open Source**: The full source code is freely available. Customize the tracker to your needs or help improve it!
 
 ---
 
@@ -33,8 +33,8 @@ Follow these steps to install and use TimelineTracker.
 
 On first start, a configuration file `api_config.json` is automatically created in your user directory.
 
-* **Path**: `C:\Users\YOUR_USERNAME\TimelineTracker\api_config.json`
-* You can also open this folder directly via the settings menu (⚙️) in the app.
+- **Path**: `C:\Users\YOUR_USERNAME\TimelineTracker\api_config.json`
+- You can also open this folder directly via the settings menu (⚙️) in the app.
 
 Edit this file to connect TimelineTracker to your project management tool. A detailed explanation of the configuration is provided below.
 
@@ -53,6 +53,24 @@ This file is the core of integration with external systems. Here you define how 
     "Content-Type": "application/json",
     "X-Redmine-API-Key": "YOUR_API_KEY"
   },
+  "custom_fields": [
+    {
+      "id": "activity",
+      "values": [
+        { "value": "10", "label": "Analyse" },
+        { "value": "8", "label": "Design" },
+        { "value": "9", "label": "Entwicklung" },
+        { "value": "11", "label": "Test" },
+        { "value": "12", "label": "Prüfung" },
+        { "value": "13", "label": "Dokumentation" },
+        { "value": "14", "label": "Besprechung" },
+        { "value": "16", "label": "Sonstiges" },
+        { "value": "17", "label": "Supportleistung" },
+        { "value": "26", "label": "QM-Dokumentation" },
+        { "value": "28", "label": "QM TechnischeDokumentation" }
+      ]
+    }
+  ],
   "endpoints": {
     "log_time": {
       "method": "POST",
@@ -61,7 +79,8 @@ This file is the core of integration with external systems. Here you define how 
         "time_entry": {
           "issue_id": "{issue_id}",
           "hours": "{time_decimal}",
-          "comments": "{comment}"
+          "comments": "{comment}",
+          "activity_id": "{custom_field_activity}"
         }
       },
       "response_mapping": {
@@ -91,21 +110,21 @@ This file is the core of integration with external systems. Here you define how 
 
 ### Field Explanation
 
-* `api_base_url`: The base URL of your API (e.g., `https://redmine.softwelop.com/`).
-* `api_headers`: An object for HTTP headers. Typically includes your API key or an authentication token.
-* `endpoints`: Defines the three actions the tracker can perform:
-    * `log_time`: Log time.
-    * `search_issue`: Search for a task.
-    * `delete_time_entry`: Delete a time entry.
-* **Parameters within an endpoint**:
-    * `method`: The HTTP method (`GET`, `POST`, `DELETE`).
-    * `path`: The API path appended to the `api_base_url`. Placeholders like `{time_entry_id}` are replaced automatically.
-    * `body`: The JSON structure for `POST` requests. Placeholders `{issue_id}`, `{time_decimal}`, and `{comment}` are filled by the tracker.
-    * `params`: URL parameters for `GET` requests. `{query}` is replaced with the search input.
-    * `response_mapping`: Defines how the API response is interpreted.
-        * `results_path`: Path to the array of results (e.g., `issues`).
-        * `display_field`: Field displayed in the search list (e.g., `subject`).
-        * `id_field`: Field containing the unique ID of an entry.
+- `api_base_url`: The base URL of your API (e.g., `https://redmine.softwelop.com/`).
+- `api_headers`: An object for HTTP headers. Typically includes your API key or an authentication token.
+- `endpoints`: Defines the three actions the tracker can perform:
+  - `log_time`: Log time.
+  - `search_issue`: Search for a task.
+  - `delete_time_entry`: Delete a time entry.
+- **Parameters within an endpoint**:
+  - `method`: The HTTP method (`GET`, `POST`, `DELETE`).
+  - `path`: The API path appended to the `api_base_url`. Placeholders like `{time_entry_id}` are replaced automatically.
+  - `body`: The JSON structure for `POST` requests. Placeholders `{issue_id}`, `{time_decimal}`, and `{comment}` are filled by the tracker.
+  - `params`: URL parameters for `GET` requests. `{query}` is replaced with the search input.
+  - `response_mapping`: Defines how the API response is interpreted.
+    - `results_path`: Path to the array of results (e.g., `issues`).
+    - `display_field`: Field displayed in the search list (e.g., `subject`).
+    - `id_field`: Field containing the unique ID of an entry.
 
 ---
 
@@ -120,10 +139,10 @@ To build the application from source, you need Python and the packages listed in
 2.  **Create executable**:
     Run the `build.bat` file. It uses `PyInstaller` to create a single `.exe` in the `dist` folder and copies all necessary additional files (icons, example config).
 3.  **Create installer**:
-    * Install [Inno Setup](https://jrsoftware.org/isinfo.php).
-    * Open `installer/installer_project.iss` in Inno Setup.
-    * Adjust the paths in the `[Files]` section to point to the files in your `dist` folder.
-    * Compile the script in Inno Setup to produce the `TimelineTracker.exe` installer.
+    - Install [Inno Setup](https://jrsoftware.org/isinfo.php).
+    - Open `installer/installer_project.iss` in Inno Setup.
+    - Adjust the paths in the `[Files]` section to point to the files in your `dist` folder.
+    - Compile the script in Inno Setup to produce the `TimelineTracker.exe` installer.
 
 ---
 
