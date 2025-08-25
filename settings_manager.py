@@ -5,23 +5,33 @@ import winshell
 from app_config import DB_PATH, initialize_config
 
 # --- Konstanten ---
-# Der Name, den die Verknüpfung im Autostart haben soll
-SHORTCUT_NAME = "Timeline Tracker.lnk" 
-# Der Name deines Hauptskripts
-# WICHTIG: Passe diesen Namen an, falls deine Hauptdatei anders heißt!
-MAIN_SCRIPT_NAME = "main.py" 
-
+SHORTCUT_NAME = "Timeline Tracker.lnk"
+MAIN_SCRIPT_NAME = "tracker_app.py" 
 
 def setup_database():
     """Initialisiert die Datenbanktabellen, falls sie nicht existieren."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    
+    # ### DATENBANK-SCHEMA ERWEITERT ###
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS activity_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, app_name TEXT, window_title TEXT,
-            start_time DATETIME UNIQUE, end_time DATETIME
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            app_name TEXT, 
+            window_title TEXT,
+            start_time DATETIME UNIQUE, 
+            end_time DATETIME,
+            exe_path TEXT 
         )
     ''')
+    # Alte Tabellen ohne die neue Spalte updaten
+    try:
+        cursor.execute('ALTER TABLE activity_events ADD COLUMN exe_path TEXT')
+        print("Datenbank-Schema für 'activity_events' erfolgreich erweitert.")
+    except sqlite3.OperationalError:
+        # Die Spalte existiert bereits, alles gut.
+        pass
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS manual_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT, start_time DATETIME NOT NULL,
@@ -35,6 +45,7 @@ def setup_database():
     conn.commit()
     conn.close()
 
+# --- Der Rest der Datei bleibt unverändert ---
 def save_setting(key, value):
     """Speichert eine Einstellung in der Datenbank."""
     conn = sqlite3.connect(DB_PATH)
@@ -52,8 +63,6 @@ def load_setting(key):
     conn.close()
     return result[0] if result else ""
 
-# --- Autostart-Funktionen ---
-
 def _get_shortcut_path():
     """Gibt den vollständigen Pfad zur Autostart-Verknüpfung zurück."""
     return os.path.join(winshell.startup(), SHORTCUT_NAME)
@@ -68,14 +77,9 @@ def set_autostart(enable: bool):
     
     if enable:
         if is_autostart_enabled():
-            return # Ist bereits aktiviert
-
-        # Pfad zum pythonw.exe Interpreter (vermeidet Konsolenfenster)
+            return 
         python_executable = sys.executable.replace("python.exe", "pythonw.exe")
-        # Pfad zum Hauptskript
         script_path = os.path.abspath(MAIN_SCRIPT_NAME)
-
-        # Erstelle die Verknüpfung
         with winshell.shortcut(shortcut_path) as shortcut:
             shortcut.path = python_executable
             shortcut.arguments = f'"{script_path}"'
@@ -84,13 +88,9 @@ def set_autostart(enable: bool):
         print("Autostart aktiviert.")
     else:
         if not is_autostart_enabled():
-            return # Ist bereits deaktiviert
-
+            return
         try:
             os.remove(shortcut_path)
             print("Autostart deaktiviert.")
         except OSError as e:
             print(f"Fehler beim Deaktivieren des Autostarts: {e}")
-            
-            
-            

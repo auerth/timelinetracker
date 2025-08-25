@@ -16,3 +16,4 @@ winshell
 # Für die Kommunikation mit der REST-API
 requests
 pywin32
+psutil

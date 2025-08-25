@@ -10,19 +10,26 @@ import settings_manager
 import restapi_controller
 import os
 import threading
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
 import pystray
 from search_dialog import SearchDialog
 import json
 import socket
 import sys
 
+# Geänderte/Neue Imports
+import psutil
+import win32gui
+import win32process
+import win32con
+import win32api
+import win32ui # NEU
+
 # Importiere die Pfade aus deiner Konfigurationsdatei
 from app_config import APP_DIR, CONFIG_PATH, DB_PATH, initialize_config
 from settings_dialog import SettingsDialog
 
 # --- Globale Konstanten ---
-# Diese bleiben global, da sie sich nicht ändern.
 SINGLE_INSTANCE_PORT = 38765
 FOCUS_MESSAGE = b"focus"
 BLOCK_DURATION_MINUTES = 5
@@ -42,8 +49,10 @@ WINDOW_WIDTH = 1000
 TIME_AXIS_WIDTH = 60
 GAP_WIDTH = 10
 Y_PADDING = 10
+ICON_CACHE_DIR = os.path.join(APP_DIR, 'icons')
 
-# --- Globale Hilfsfunktionen, die unabhängig von der App-Instanz sind ---
+
+# --- Globale Hilfsfunktionen ---
 def create_icon_image():
     """Lädt das Icon-Bild aus der Datei 'icon.png' oder erstellt ein Fallback."""
     try:
@@ -57,8 +66,9 @@ def create_icon_image():
         dc.rectangle((width // 3, height // 3, width * 2 // 3, height * 2 // 3), fill=(58, 134, 255, 255))
         return image
 
+# ### KORRIGIERTE ICON-EXTRAKTION ###
 def track_activity_in_blocks():
-    """Hintergrund-Thread, der die Fensteraktivität aufzeichnet."""
+    """Hintergrund-Thread, der die Fensteraktivität aufzeichnet und Icons extrahiert."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     while True:
@@ -67,21 +77,72 @@ def track_activity_in_blocks():
         start_minute = minutes_into_hour - (minutes_into_hour % BLOCK_DURATION_MINUTES)
         block_start_time = now.replace(minute=start_minute, second=0, microsecond=0)
         block_end_time = block_start_time + timedelta(minutes=BLOCK_DURATION_MINUTES)
-        active_window = gw.getActiveWindow()
-        if active_window and active_window.title:
-            title_parts = active_window.title.split('-')
-            app_name = title_parts[-1].strip() if len(title_parts) > 1 else title_parts[0].strip()
-            window_title = active_window.title
-        else:
-            app_name, window_title = "System", "Inaktiv / Kein Fenster"
+        
+        app_name, window_title, exe_path = "System", "Inaktiv / Kein Fenster", None
+        
+        try:
+            active_window = gw.getActiveWindow()
+            if active_window and active_window.title:
+                hwnd = active_window._hWnd
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                process = psutil.Process(pid)
+                exe_path = process.exe()
+                app_name = os.path.basename(exe_path)
+                window_title = active_window.title
+
+                icon_path = os.path.join(ICON_CACHE_DIR, f"{app_name}.png")
+                if not os.path.exists(icon_path):
+                    try:
+                        large, small = win32gui.ExtractIconEx(exe_path, 0)
+                        if large:
+                            h_icon = large[0]
+                            
+                            # --- START DER KORREKTUR ---
+                            hdc = win32ui.CreateDCFromHandle(win32gui.GetDC(0))
+                            hbmp = win32ui.CreateBitmap()
+                            hbmp.CreateCompatibleBitmap(hdc, 32, 32)
+                            hdc_dest = hdc.CreateCompatibleDC()
+                            hdc_dest.SelectObject(hbmp)
+                            
+                            hdc_dest.DrawIcon((0, 0), h_icon)
+                            
+                            bmp_str = hbmp.GetBitmapBits(True)
+                            
+                            img = Image.frombuffer('RGBA', (32, 32), bmp_str, 'raw', 'BGRA', 0, 1)
+                            img.save(icon_path)
+
+                            # Resourcen freigeben
+                            win32gui.DestroyIcon(h_icon)
+                            hdc.DeleteDC()
+                            hdc_dest.DeleteDC()
+                            win32gui.ReleaseDC(0, win32gui.GetDC(0))
+                            # --- ENDE DER KORREKTUR ---
+
+                    except Exception as e:
+                        print(f"Icon für {app_name} konnte nicht extrahiert werden: {e}")
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied, gw.PyGetWindowException):
+            active_window = gw.getActiveWindow()
+            if active_window and active_window.title:
+                 title_parts = active_window.title.split('-')
+                 app_name = title_parts[-1].strip() if len(title_parts) > 1 else title_parts[0].strip()
+                 window_title = active_window.title
+            else:
+                app_name, window_title = "System", "Inaktiv / Kein Fenster"
+            exe_path = None
+        except Exception as e:
+            print(f"Ein unerwarteter Fehler beim Tracking ist aufgetreten: {e}")
+
         cursor.execute(
-            'INSERT OR IGNORE INTO activity_events (app_name, window_title, start_time, end_time) VALUES (?, ?, ?, ?)',
-            (app_name, window_title, block_start_time, block_end_time)
+            'INSERT OR IGNORE INTO activity_events (app_name, window_title, start_time, end_time, exe_path) VALUES (?, ?, ?, ?, ?)',
+            (app_name, window_title, block_start_time, block_end_time, exe_path)
         )
         conn.commit()
+        
         sleep_duration_seconds = (block_end_time - datetime.now()).total_seconds()
         if sleep_duration_seconds > 0:
             time.sleep(sleep_duration_seconds + 1)
+
 
 def draw_wrapped_and_truncated_text(canvas, x, y, text, max_width, max_bottom_y, **kwargs):
     """Zeichnet Text mit automatischem Umbruch und Kürzung."""
@@ -108,7 +169,6 @@ def draw_wrapped_and_truncated_text(canvas, x, y, text, max_width, max_bottom_y,
 
 class TimelineTrackerApp:
     def __init__(self):
-        # Alle UI-Elemente und Zustandsvariablen als Instanzvariablen initialisieren
         self.root = None
         self.canvas_auto = None
         self.canvas_manual = None
@@ -117,27 +177,19 @@ class TimelineTrackerApp:
         self.resize_timer = None
         self.server_socket = None
         self.server_thread = None
-
         self.displayed_date = date.today()
         self.drag_data = {"start_y": None, "temp_rect": None}
+        self.is_first_instance = False
+        self.icon_cache = {} 
         
-        self.is_first_instance = False # Standardmäßig annehmen, dass es nicht die erste ist
-        # Prüfen, ob bereits eine Instanz läuft
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            
-            # DIE PROBLEMATISCHE ZEILE WURDE HIER ENTFERNT!
-            # self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            
-            # Dieser bind-Aufruf wird jetzt beim zweiten Start garantiert fehlschlagen
             self.server_socket.bind(("localhost", SINGLE_INSTANCE_PORT))
             self.server_socket.listen(1)
             self.is_first_instance = True
         except OSError:
-            # Dieser Block wird jetzt zuverlässig von der zweiten Instanz erreicht
             self.is_first_instance = False
 
-    # --- Methoden für Fenster- und Tray-Verwaltung ---
     def on_closing(self):
         self.root.withdraw()
 
@@ -162,7 +214,6 @@ class TimelineTrackerApp:
         thread = threading.Thread(target=self.tray_icon.run, daemon=True)
         thread.start()
 
-    # --- Methoden für die Single-Instance-Logik ---
     def _focus_window(self):
         if self.root:
             self.root.deiconify()
@@ -179,7 +230,6 @@ class TimelineTrackerApp:
             except OSError:
                 break
 
-    # --- Methoden zum Zeichnen und Aktualisieren der UI ---
     def _draw_time_axis_and_grid(self, canvas, width):
         canvas.delete("all")
         for hour in range(24):
@@ -193,17 +243,18 @@ class TimelineTrackerApp:
 
     def _merge_blocks(self, events):
         if not events: return []
-        merged, duration = [], BLOCK_DURATION_MINUTES
-        current_app, current_title, current_start, _ = events[0]
+        merged = []
+        duration = BLOCK_DURATION_MINUTES
+        current_app, current_title, current_start, _, current_exe = events[0]
         for i in range(1, len(events)):
-            next_app, next_title, _, _ = events[i]
+            next_app, next_title, _, _, next_exe = events[i]
             if next_app == current_app and next_title == current_title:
                 duration += BLOCK_DURATION_MINUTES
             else:
-                merged.append({"app": current_app, "title": current_title, "start_time": datetime.fromisoformat(current_start), "duration": duration})
-                current_app, current_title, current_start, _ = events[i]
+                merged.append({"app": current_app, "title": current_title, "start_time": datetime.fromisoformat(current_start), "duration": duration, "exe_path": current_exe})
+                current_app, current_title, current_start, _, current_exe = events[i]
                 duration = BLOCK_DURATION_MINUTES
-        merged.append({"app": current_app, "title": current_title, "start_time": datetime.fromisoformat(current_start), "duration": duration})
+        merged.append({"app": current_app, "title": current_title, "start_time": datetime.fromisoformat(current_start), "duration": duration, "exe_path": current_exe})
         return merged
 
     def draw_timeline(self, target_date):
@@ -218,21 +269,51 @@ class TimelineTrackerApp:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Automatische Events zeichnen
-        cursor.execute("SELECT app_name, window_title, start_time, end_time FROM activity_events WHERE start_time >= ? AND start_time < ? ORDER BY start_time", (day_start, day_end))
-        merged_events = self._merge_blocks(cursor.fetchall())
-        app_colors, colors = {}, ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac"]
+        cursor.execute("SELECT app_name, window_title, start_time, end_time, exe_path FROM activity_events WHERE start_time >= ? AND start_time < ? ORDER BY start_time", (day_start, day_end))
+        all_events = cursor.fetchall()
+
+        if not all_events:
+            conn.close()
+            return
+            
+        merged_events = self._merge_blocks(all_events)
+        app_colors = {}
+        colors = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac"]
+        
         for block in merged_events:
             minutes_from_midnight = (block["start_time"].hour * 60) + block["start_time"].minute
             y_start = minutes_from_midnight * PIXELS_PER_MINUTE + Y_PADDING
             height = block["duration"] * PIXELS_PER_MINUTE
-            if block["app"] not in app_colors: app_colors[block["app"]] = colors[len(app_colors) % len(colors)]
+            
+            if block["app"] not in app_colors:
+                app_colors[block["app"]] = colors[len(app_colors) % len(colors)]
+                
             self.canvas_auto.create_rectangle(TIME_AXIS_WIDTH + 10, y_start, auto_width - 10, y_start + height, fill=app_colors[block["app"]], outline=COLOR_GRID_LINE, width=1)
+            
             if height > 15:
-                self.canvas_auto.create_text(TIME_AXIS_WIDTH + 20, y_start + 5, text=f"{block['title'][:40]}", anchor="nw", font=("Segoe UI", 8, "bold"), fill="white")
+                icon_x_offset = 0
+                icon_path = os.path.join(ICON_CACHE_DIR, f"{block['app']}.png")
+                
+                if block['app'] in self.icon_cache:
+                    icon_image = self.icon_cache[block['app']]
+                elif os.path.exists(icon_path):
+                    try:
+                        pil_img = Image.open(icon_path).resize((16, 16), Image.Resampling.LANCZOS)
+                        self.icon_cache[block['app']] = ImageTk.PhotoImage(pil_img)
+                        icon_image = self.icon_cache[block['app']]
+                    except Exception as e:
+                        print(f"Konnte Icon nicht laden: {e}")
+                        icon_image = None
+                else:
+                    icon_image = None
+
+                if icon_image:
+                    self.canvas_auto.create_image(TIME_AXIS_WIDTH + 20, y_start + height / 2, image=icon_image, anchor="w")
+                    icon_x_offset = 22
+                    
+                self.canvas_auto.create_text(TIME_AXIS_WIDTH + 20 + icon_x_offset, y_start + 5, text=f"{block['title'][:40]}", anchor="nw", font=("Segoe UI", 8, "bold"), fill="white")
                 self.canvas_auto.create_text(auto_width - 20, y_start + 5, text=f"{block['duration'] / 60.0:.2f}h", anchor="ne", font=FONT_BOLD, fill="white")
 
-        # Manuelle Events zeichnen
         cursor.execute("SELECT id, start_time, end_time, description, comment, externalId FROM manual_events WHERE start_time >= ? AND start_time < ? ORDER BY start_time", (day_start, day_end))
         text_font = font.Font(font=FONT_BOLD)
         for event_id, start_time_str, end_time_str, description, comment, externalId in cursor.fetchall():
@@ -266,7 +347,6 @@ class TimelineTrackerApp:
         if target_date == date.today():
             self.root.after(60000, lambda: self.draw_timeline(self.displayed_date))
 
-    # --- Methoden für Navigation und Events ---
     def show_previous_day(self):
         self.displayed_date -= timedelta(days=1)
         self.date_entry.set_date(self.displayed_date)
@@ -310,7 +390,6 @@ class TimelineTrackerApp:
                     self.canvas_auto.yview_moveto(max(0, scroll_pos))
                     self.canvas_manual.yview_moveto(max(0, scroll_pos))
 
-    # --- Methoden für Drag & Drop und Kontextmenü ---
     def snap_y_to_block(self, y):
         pixels_per_block = PIXELS_PER_MINUTE * BLOCK_DURATION_MINUTES
         relative_y = y - Y_PADDING
@@ -324,9 +403,7 @@ class TimelineTrackerApp:
 
     def start_drag(self, event):
         y = self.canvas_manual.canvasy(event.y)
-        # NEU: Speichere die exakte (un-snapped) Y-Position beim Klick
         self.drag_data["raw_start_y"] = y
-        
         self.drag_data["start_y"] = self.snap_y_to_block(y)
         manual_width = self.canvas_manual.winfo_width()
         self.drag_data["temp_rect"] = self.canvas_manual.create_rectangle(
@@ -344,28 +421,18 @@ class TimelineTrackerApp:
     def end_drag(self, event):
         if self.drag_data["start_y"] is None: return
         self.canvas_manual.delete(self.drag_data["temp_rect"])
-
-        # NEU: Prüfe die tatsächliche Mausbewegung in Pixeln
         raw_end_y = self.canvas_manual.canvasy(event.y)
-        # Hole die gespeicherte exakte Startposition
         raw_start_y = self.drag_data.get("raw_start_y", raw_end_y)
         distance_moved = abs(raw_end_y - raw_start_y)
-        
-        # Definiere einen Mindestabstand (z.B. 5 Pixel), um einen Klick von einem Drag zu unterscheiden
         min_drag_pixels = 5
-
-        # Wenn die Maus kaum bewegt wurde, war es nur ein Klick -> Aktion abbrechen
         if distance_moved < min_drag_pixels:
             self.drag_data["start_y"], self.drag_data["temp_rect"] = None, None
             return
 
-        # --- Der restliche Code funktioniert jetzt für alle Fälle korrekt ---
         y_start_raw = self.drag_data["start_y"]
         y_end_raw = self.snap_y_to_block(raw_end_y)
-        
         y_start = min(y_start_raw, y_end_raw)
         y_end = max(y_start_raw, y_end_raw) + (PIXELS_PER_MINUTE * BLOCK_DURATION_MINUTES)
-        
         start_time = self.y_to_datetime(y_start, self.displayed_date)
         end_time = self.y_to_datetime(y_end, self.displayed_date)
         
@@ -377,33 +444,28 @@ class TimelineTrackerApp:
             conn.close()
             color_config = {'canvas_bg': COLOR_CANVAS_BG, 'bg': COLOR_BG, 'fg': COLOR_FG, 'manual_block': COLOR_MANUAL_BLOCK}
             dialog = SearchDialog(self.root, title="Aufgabe zuweisen", colors=color_config)
-            selected_task, comment = dialog.result['task'], dialog.result['comment']
-            custom_fields = dialog.result.get('custom_fields', {})
+            if dialog.result:
+                selected_task, comment = dialog.result.get('task'), dialog.result.get('comment')
+                custom_fields = dialog.result.get('custom_fields', {})
 
-            if selected_task and selected_task.get("id"):
-                try:
-                    api_controller = restapi_controller.ApiController()
-                    duration = (end_time - start_time).total_seconds() / 3600.0
-                    # Bereite kwargs für log_time vor
-                    log_time_kwargs = {}
-                    for field_id, value in custom_fields.items():
-                        log_time_kwargs[f"custom_field_{field_id}"] = value
-
-                    response = api_controller.log_time(
-                        issue_id=selected_task['id'],
-                        time_decimal=duration,
-                        comment=comment,
-                        **log_time_kwargs
-                    )
-                    if response and 'id' in response:
-                        with sqlite3.connect(DB_PATH) as conn:
-                            description = f"[#{selected_task['id']}] {selected_task['display']}"
-                            conn.execute('INSERT INTO manual_events (start_time, end_time, description,externalId,comment,time_entry_id) VALUES (?, ?, ?, ?, ?,?)', (start_time, end_time, description,selected_task['id'],comment,response['id']))
-                    elif response and 'error' in response:
-                        messagebox.showerror("API Fehler", f"Zeit konnte nicht erfasst werden:\n\n{response['error']}")
-                except Exception as e:
-                    messagebox.showerror("Unerwarteter Fehler", f"API-Kommunikation fehlgeschlagen: {e}")
-                self.draw_timeline(self.displayed_date)
+                if selected_task and selected_task.get("id"):
+                    try:
+                        api_controller = restapi_controller.ApiController()
+                        duration = (end_time - start_time).total_seconds() / 3600.0
+                        log_time_kwargs = {f"custom_field_{field_id}": value for field_id, value in custom_fields.items()}
+                        response = api_controller.log_time(
+                            issue_id=selected_task['id'], time_decimal=duration, comment=comment, **log_time_kwargs
+                        )
+                        if response and 'id' in response:
+                            with sqlite3.connect(DB_PATH) as conn:
+                                description = f"[#{selected_task['id']}] {selected_task['display']}"
+                                conn.execute('INSERT INTO manual_events (start_time, end_time, description,externalId,comment,time_entry_id) VALUES (?, ?, ?, ?, ?,?)', 
+                                             (start_time, end_time, description,selected_task['id'],comment,response['id']))
+                        elif response and 'error' in response:
+                            messagebox.showerror("API Fehler", f"Zeit konnte nicht erfasst werden:\n\n{response['error']}")
+                    except Exception as e:
+                        messagebox.showerror("Unerwarteter Fehler", f"API-Kommunikation fehlgeschlagen: {e}")
+                    self.draw_timeline(self.displayed_date)
         
         self.drag_data["start_y"], self.drag_data["temp_rect"] = None, None
 
@@ -444,9 +506,7 @@ class TimelineTrackerApp:
         colors = {'bg': COLOR_BG, 'canvas_bg': COLOR_CANVAS_BG, 'fg': COLOR_FG, 'manual_block': COLOR_MANUAL_BLOCK, 'grid_line': COLOR_GRID_LINE}
         SettingsDialog(self.root, "Einstellungen", colors, settings_manager, APP_DIR, CONFIG_PATH, DB_PATH)
 
-    # --- Die Haupt-Startmethode ---
     def start(self):
-        """Startet die Anwendung: Prüft auf andere Instanzen und baut die GUI auf."""
         if not self.is_first_instance:
             print("Anwendung läuft bereits. Sende Fokus-Signal und beende mich.")
             try:
@@ -457,11 +517,10 @@ class TimelineTrackerApp:
                 print(f"Fehler bei der Kommunikation mit der Hauptinstanz: {e}")
             sys.exit(0)
 
-        # Dies ist die erste Instanz, starte die Anwendung normal.
         initialize_config()
         settings_manager.setup_database()
+        os.makedirs(ICON_CACHE_DIR, exist_ok=True)
         
-        # Starte den Tracking- und den Server-Thread
         threading.Thread(target=track_activity_in_blocks, daemon=True).start()
         threading.Thread(target=self._run_server, daemon=True).start()
 
@@ -475,7 +534,6 @@ class TimelineTrackerApp:
         except tk.TclError:
             print("WARNUNG: 'icon.ico' nicht gefunden.")
             
-        # Dark Mode für Titelleiste (nur Windows)
         try:
             import ctypes
             self.root.update_idletasks()
@@ -484,7 +542,6 @@ class TimelineTrackerApp:
             ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(value), ctypes.sizeof(value))
         except Exception: pass
 
-        # --- UI Aufbau ---
         style = ttk.Style(self.root)
         style.theme_use("clam")
         style.configure(".", background=COLOR_BG, foreground=COLOR_FG, font=FONT_NORMAL)
@@ -533,7 +590,6 @@ class TimelineTrackerApp:
         self.canvas_auto.config(yscrollcommand=scrollbar.set)
         self.canvas_manual.config(yscrollcommand=scrollbar.set)
         
-        # --- Event Bindings ---
         self.root.bind("<Configure>", self.on_resize)
         self.root.bind_all("<MouseWheel>", on_mousewheel)
         self.root.bind_all("<Button-4>", on_mousewheel)
@@ -544,7 +600,6 @@ class TimelineTrackerApp:
         self.canvas_manual.bind("<ButtonRelease-1>", self.end_drag)
         self.canvas_manual.bind("<Button-3>", self.show_context_menu)
 
-        # --- Initialisierung nach dem Aufbau ---
         self.setup_tray_icon()
         self.root.after(100, lambda: self.draw_timeline(self.displayed_date))
         self.root.after(500, self.scroll_to_now)
