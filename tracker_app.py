@@ -308,7 +308,7 @@ class TimelineTrackerApp:
                     icon_image = None
 
                 if icon_image:
-                    self.canvas_auto.create_image(TIME_AXIS_WIDTH + 20, y_start + height / 2, image=icon_image, anchor="w")
+                    self.canvas_auto.create_image(TIME_AXIS_WIDTH + 20, y_start +13, image=icon_image, anchor="w")
                     icon_x_offset = 22
                     
                 self.canvas_auto.create_text(TIME_AXIS_WIDTH + 20 + icon_x_offset, y_start + 5, text=f"{block['title'][:40]}", anchor="nw", font=("Segoe UI", 8, "bold"), fill="white")
