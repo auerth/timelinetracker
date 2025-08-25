@@ -4,6 +4,24 @@
     "Content-Type": "application/json",
     "X-Redmine-API-Key": ""
   },
+  "custom_fields":[
+    {
+      "id":"activity",
+      "values":[
+        { "value": "10", "label": "Analyse" },
+        { "value": "8", "label": "Design" },
+        { "value": "9", "label": "Entwicklung" },
+        { "value": "11", "label": "Test" },
+        { "value": "12", "label": "Prüfung" },
+        { "value": "13", "label": "Dokumentation" },
+        { "value": "14", "label": "Besprechung" },
+        { "value": "16", "label": "Sonstiges" },
+        { "value": "17", "label": "Supportleistung" },
+        { "value": "26", "label": "QM-Dokumentation" },
+        { "value": "28", "label": "QM TechnischeDokumentation" }
+      ]
+    }
+  ],
   "endpoints": {
     "log_time": {
       "method": "POST",
@@ -12,7 +30,8 @@
         "time_entry": {
           "issue_id": "{issue_id}",
           "hours": "{time_decimal}",
-          "comments": "{comment}"
+          "comments": "{comment}",
+          "activity_id": "{custom_field_activity}"
         }
       },
       "response_mapping": {

@@ -60,10 +60,16 @@ class ApiController:
 
 # In der Klasse ApiController
 
-    def log_time(self, issue_id: int, time_decimal: float, comment: str):
+    def log_time(self, issue_id: int, time_decimal: float, comment: str, **kwargs):
         """Erfasst Zeit für eine Aufgabe und gibt die ID des neuen Eintrags zurück."""
         # 1. API-Aufruf durchführen
-        raw_response = self._execute('log_time', issue_id=issue_id, time_decimal=time_decimal, comment=comment)
+        all_args = {
+            'issue_id': issue_id,
+            'time_decimal': time_decimal,
+            'comment': comment
+        }
+        all_args.update(kwargs)
+        raw_response = self._execute('log_time', **all_args)
 
         # 2. Prüfen, ob der Aufruf an sich fehlgeschlagen ist
         if not raw_response or (isinstance(raw_response, dict) and "error" in raw_response):

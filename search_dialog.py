@@ -6,6 +6,7 @@ import restapi_controller
 import ctypes
 import json
 from base_dialog import BaseDialog 
+
 class SearchDialog(BaseDialog):
     def __init__(self, parent, title, colors):
         # Alle Attribute zuerst initialisieren
@@ -14,10 +15,13 @@ class SearchDialog(BaseDialog):
         self.result_queue = queue.Queue()
         self.results_data = []
         self.colors = colors
-        self.result = {'task': None, 'comment': ''} # Wichtig für den Fall, dass apply() nicht aufgerufen wird
-
+        self.result = {'task': None, 'comment': '', 'custom_fields': {}} # Wichtig für den Fall, dass apply() nicht aufgerufen wird
+        self.custom_fields_data = {}
+        self.custom_field_vars = {}
         try:
             self.api_controller = restapi_controller.ApiController()
+            # Lade benutzerdefinierte Felder aus der Konfiguration
+            self.custom_fields = self.api_controller.config.get('custom_fields', [])
         except FileNotFoundError:
             messagebox.showerror("Fehler", "api_config.json nicht gefunden!", parent=parent)
             self.api_controller = None
@@ -47,7 +51,8 @@ class SearchDialog(BaseDialog):
         self.listbox = tk.Listbox(list_frame, height=10, 
                                   bg=self.colors['canvas_bg'], fg=self.colors['fg'], 
                                   selectbackground=self.colors['manual_block'],
-                                  highlightthickness=0, borderwidth=0, activestyle='none')
+                                  highlightthickness=0, borderwidth=0, activestyle='none',
+                                  exportselection=False) # HIER IST DIE ÄNDERUNG
         self.scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
         self.listbox.config(yscrollcommand=self.scrollbar.set)
         
@@ -57,11 +62,33 @@ class SearchDialog(BaseDialog):
 
         ttk.Label(content_frame, text="Kommentar:").pack(anchor="w", pady=(10, 2))
         self.comment_text = tk.Text(content_frame, height=4, width=50,
-                                    bg=self.colors['canvas_bg'], fg=self.colors['fg'],
-                                    insertbackground=self.colors['fg'],
-                                    highlightthickness=0, borderwidth=0)
-        self.comment_text.pack(fill="x", expand=True)
+                                     bg=self.colors['canvas_bg'], fg=self.colors['fg'],
+                                     insertbackground=self.colors['fg'],
+                                     highlightthickness=0, borderwidth=0)
+        self.comment_text.pack(fill="x", expand=True, pady=(0,10))
         
+              
+        # --- Benutzerdefinierte Felder ---
+        for field in self.custom_fields:
+            field_id = field.get('id')
+            values = field.get('values', [])
+            if not field_id or not values:
+                continue
+
+            ttk.Label(content_frame, text=f"{field_id.replace('_', ' ').capitalize()}:").pack(anchor="w", pady=(5, 2))
+
+            # Speichere die Zuordnung von Label zu Wert
+            self.custom_fields_data[field_id] = {item['label']: item['value'] for item in values}
+            labels = [item['label'] for item in values]
+
+            # Erstelle eine Combobox
+            combo_var = tk.StringVar()
+            combobox = ttk.Combobox(content_frame, textvariable=combo_var, values=labels, state="readonly", style='Dark.TCombobox')
+            if labels:
+                combobox.set(labels[0]) # Setze Standardwert
+            combobox.pack(fill="x", expand=True)
+
+            self.custom_field_vars[field_id] = combo_var
         self.process_queue()
         
    
@@ -134,9 +161,18 @@ class SearchDialog(BaseDialog):
             return # self.result bleibt beim initialisierten Wert
         selected_index = selected_indices[0]
         comment = self.comment_text.get("1.0", tk.END).strip()
+       # Werte der benutzerdefinierten Felder abrufen
+        custom_field_values = {}
+        for field_id, combo_var in self.custom_field_vars.items():
+            selected_label = combo_var.get()
+            if selected_label:
+                value = self.custom_fields_data[field_id].get(selected_label)
+                custom_field_values[field_id] = value
+
         if 0 <= selected_index < len(self.results_data):
             selected_task = self.results_data[selected_index]
             self.result = {
                 "task": selected_task,
-                "comment": comment
+                "comment": comment,
+                "custom_fields": custom_field_values
             }

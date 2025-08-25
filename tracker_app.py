@@ -378,11 +378,23 @@ class TimelineTrackerApp:
             color_config = {'canvas_bg': COLOR_CANVAS_BG, 'bg': COLOR_BG, 'fg': COLOR_FG, 'manual_block': COLOR_MANUAL_BLOCK}
             dialog = SearchDialog(self.root, title="Aufgabe zuweisen", colors=color_config)
             selected_task, comment = dialog.result['task'], dialog.result['comment']
+            custom_fields = dialog.result.get('custom_fields', {})
+
             if selected_task and selected_task.get("id"):
                 try:
                     api_controller = restapi_controller.ApiController()
                     duration = (end_time - start_time).total_seconds() / 3600.0
-                    response = api_controller.log_time(issue_id=selected_task['id'], time_decimal=duration, comment=comment)
+                    # Bereite kwargs für log_time vor
+                    log_time_kwargs = {}
+                    for field_id, value in custom_fields.items():
+                        log_time_kwargs[f"custom_field_{field_id}"] = value
+
+                    response = api_controller.log_time(
+                        issue_id=selected_task['id'],
+                        time_decimal=duration,
+                        comment=comment,
+                        **log_time_kwargs
+                    )
                     if response and 'id' in response:
                         with sqlite3.connect(DB_PATH) as conn:
                             description = f"[#{selected_task['id']}] {selected_task['display']}"
