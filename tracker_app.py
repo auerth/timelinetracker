@@ -172,6 +172,7 @@ class TimelineTrackerApp:
         self.root = None
         self.canvas_auto = None
         self.canvas_manual = None
+        self.total_manual_time = None
         self.date_entry = None
         self.tray_icon = None
         self.resize_timer = None
@@ -316,10 +317,13 @@ class TimelineTrackerApp:
 
         cursor.execute("SELECT id, start_time, end_time, description, comment, externalId FROM manual_events WHERE start_time >= ? AND start_time < ? ORDER BY start_time", (day_start, day_end))
         text_font = font.Font(font=FONT_BOLD)
+        total_manual_minutes = 0
+
         for event_id, start_time_str, end_time_str, description, comment, externalId in cursor.fetchall():
             start_time, end_time = datetime.fromisoformat(start_time_str), datetime.fromisoformat(end_time_str)
             minutes_from_midnight = (start_time.hour * 60) + start_time.minute
             duration_min = (end_time - start_time).total_seconds() / 60
+            total_manual_minutes += duration_min
             y_start = minutes_from_midnight * PIXELS_PER_MINUTE + Y_PADDING
             height = duration_min * PIXELS_PER_MINUTE
             tag_id = f"manual_event_{event_id}"
@@ -331,6 +335,8 @@ class TimelineTrackerApp:
                 if comment and comment.strip():
                     y_comment_start = y_top_line + text_font.metrics('linespace') + 5
                     draw_wrapped_and_truncated_text(canvas=self.canvas_manual, x=TIME_AXIS_WIDTH + 20, y=y_comment_start, text=comment, max_width=manual_width - 100, max_bottom_y=y_start + height - 5, anchor="nw", justify="left", font=FONT_BOLD, fill="white", tags=(tag_id,))
+            total_manual_hours = total_manual_minutes / 60.0
+            self.total_manual_time.set(f"({total_manual_hours:.2f}h)")
         
         conn.close()
 
@@ -525,6 +531,8 @@ class TimelineTrackerApp:
         threading.Thread(target=self._run_server, daemon=True).start()
 
         self.root = tk.Tk()
+        self.total_manual_time = tk.StringVar(value="(0.00h)")
+
         self.root.title("Timeline Tracker")
         self.root.geometry(f"{WINDOW_WIDTH}x700")
         self.root.configure(bg=COLOR_BG)
@@ -566,8 +574,12 @@ class TimelineTrackerApp:
         main_frame.columnconfigure(0, weight=1); main_frame.columnconfigure(2, weight=1); main_frame.rowconfigure(1, weight=1)
 
         ttk.Label(main_frame, text="Automatisch erfasst", font=FONT_TITLE, anchor="w").grid(row=0, column=0, sticky="w", padx=(TIME_AXIS_WIDTH, 0), pady=5)
-        ttk.Label(main_frame, text="Manuelle Zuweisung", font=FONT_TITLE, anchor="w").grid(row=0, column=2, sticky="w", padx=(TIME_AXIS_WIDTH, 0), pady=5)
-
+        
+        manual_header_frame = ttk.Frame(main_frame)
+        manual_header_frame.grid(row=0, column=2, sticky="w", padx=(TIME_AXIS_WIDTH, 0), pady=5)
+        
+        ttk.Label(manual_header_frame, text="Manuelle Zuweisung", font=FONT_TITLE, anchor="w").pack(side="left")
+        ttk.Label(manual_header_frame, textvariable=self.total_manual_time, font=FONT_NORMAL, anchor="w").pack(side="left", padx=5)
         self.canvas_auto = tk.Canvas(main_frame, bg=COLOR_CANVAS_BG, highlightthickness=0)
         self.canvas_auto.grid(row=1, column=0, sticky="nsew", padx=(0, GAP_WIDTH // 2))
         self.canvas_manual = tk.Canvas(main_frame, bg=COLOR_CANVAS_BG, highlightthickness=0)
