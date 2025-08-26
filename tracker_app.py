@@ -328,10 +328,11 @@ class TimelineTrackerApp:
             height = duration_min * PIXELS_PER_MINUTE
             tag_id = f"manual_event_{event_id}"
             self.canvas_manual.create_rectangle(TIME_AXIS_WIDTH + 10, y_start, manual_width - 10, y_start + height, fill=COLOR_MANUAL_BLOCK, outline=COLOR_GRID_LINE, width=1, activefill=COLOR_MANUAL_BLOCK_ACTIVE, tags=(tag_id,))
+        
+            y_top_line = y_start + 5
+            self.canvas_manual.create_text(TIME_AXIS_WIDTH + 20, y_top_line, text=f"{description}", anchor="nw", font=FONT_BOLD, fill="white", tags=(tag_id,))
+            self.canvas_manual.create_text(manual_width - 20, y_top_line, text=f"{duration_min / 60.0:.2f}h", anchor="ne", font=FONT_BOLD, fill="white", tags=(tag_id,))
             if height > 30:
-                y_top_line = y_start + 5
-                self.canvas_manual.create_text(TIME_AXIS_WIDTH + 20, y_top_line, text=f"{description}", anchor="nw", font=FONT_BOLD, fill="white", tags=(tag_id,))
-                self.canvas_manual.create_text(manual_width - 20, y_top_line, text=f"{duration_min / 60.0:.2f}h", anchor="ne", font=FONT_BOLD, fill="white", tags=(tag_id,))
                 if comment and comment.strip():
                     y_comment_start = y_top_line + text_font.metrics('linespace') + 5
                     draw_wrapped_and_truncated_text(canvas=self.canvas_manual, x=TIME_AXIS_WIDTH + 20, y=y_comment_start, text=comment, max_width=manual_width - 100, max_bottom_y=y_start + height - 5, anchor="nw", justify="left", font=FONT_BOLD, fill="white", tags=(tag_id,))
