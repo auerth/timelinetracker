@@ -450,7 +450,8 @@ class TimelineTrackerApp:
         else:
             conn.close()
             color_config = {'canvas_bg': COLOR_CANVAS_BG, 'bg': COLOR_BG, 'fg': COLOR_FG, 'manual_block': COLOR_MANUAL_BLOCK}
-            dialog = SearchDialog(self.root, title="Aufgabe zuweisen", colors=color_config)
+            duration = (end_time - start_time).total_seconds() / 3600.0
+            dialog = SearchDialog(self.root, title="Aufgabe zuweisen", colors=color_config, duration_hours=duration)
             if dialog.result:
                 selected_task, comment = dialog.result.get('task'), dialog.result.get('comment')
                 custom_fields = dialog.result.get('custom_fields', {})

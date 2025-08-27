@@ -8,12 +8,13 @@ import json
 from base_dialog import BaseDialog 
 
 class SearchDialog(BaseDialog):
-    def __init__(self, parent, title, colors):
+    def __init__(self, parent, title, colors,duration_hours=0):
         # Alle Attribute zuerst initialisieren
         self.search_timer = None
         self.search_id = 0
         self.result_queue = queue.Queue()
         self.results_data = []
+        self.duration_hours = duration_hours # Dauer in Stunden speichern
         self.colors = colors
         self.result = {'task': None, 'comment': '', 'custom_fields': {}} # Wichtig für den Fall, dass apply() nicht aufgerufen wird
         self.custom_fields_data = {}
@@ -39,6 +40,11 @@ class SearchDialog(BaseDialog):
         content_frame = ttk.Frame(master, padding=(10, 10))
         content_frame.pack(fill="both", expand=True)
 
+        # --- NEU: Anzeige der Dauer ---
+        if self.duration_hours > 0:
+            # Formatiert den Text und ersetzt den Punkt durch ein Komma
+            duration_text = f"{self.duration_hours:.2f} h zuweisen".replace('.', ',')
+            ttk.Label(content_frame, text=duration_text, font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 10))
         ttk.Label(content_frame, text="Aufgabe suchen:").pack(anchor="w")
         # Der in __init__ definierte Stil wird hier angewendet
         self.entry = ttk.Entry(content_frame, width=50, style='Dark.TEntry')
