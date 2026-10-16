@@ -154,8 +154,8 @@ Contributions are welcome! If you find a bug or want to suggest a feature, pleas
 
 ## 📄 License & Usage
 
-TimelineTracker is free and may be used, modified, and redistributed.
+TimelineTracker is released under the [MIT License](LICENSE): free to use, modify and redistribute.
 
-The only condition is **crediting the original author** (softwelop - Thorben Auer) in derivative works or redistribution.
+The only condition is to keep the copyright notice, i.e. **credit the original author** (softwelop - Thorben Auer) in derivative works or redistribution – for example in your README, your app credits or your code comments.
 
-**What does "credit" mean?** When using the code in your own project, please mention the origin – for example, in your README, in your app credits, or in your code comments.
+Platform: Windows (uses the Win32 API to read the active window).
